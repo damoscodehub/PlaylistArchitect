@@ -1,6 +1,8 @@
+from tabulate import tabulate
 import spotipy
 from spotify_auth import sp  # Import the authenticated Spotify client
 import math
+import time
 
 
 def format_duration(milliseconds):
@@ -11,14 +13,18 @@ def format_duration(milliseconds):
     return f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}"
 
 
-def get_all_playlists_with_details():
+def truncate(text, length):
+    """Truncate text to the specified length, adding '...' if necessary."""
+    return text if len(text) <= length else text[:length - 3] + "..."
+
+
+def process_playlists():
     """
-    Retrieve all playlists with detailed information.
+    Generator to process playlists one by one.
     
-    Returns:
-        list: A list of dictionaries containing playlist info with custom ID, user, name, and total duration.
+    Yields:
+        dict: Processed playlist info with custom ID, user, name, and total duration.
     """
-    playlists = []
     offset = 0
     limit = 50  # Spotify API returns a maximum of 50 playlists per request
     custom_id = 1  # Custom in-account ID starting from 1
@@ -26,8 +32,9 @@ def get_all_playlists_with_details():
     while True:
         response = sp.current_user_playlists(limit=limit, offset=offset)
         for playlist in response['items']:
+            print(f"Processing playlist: {playlist['name'][:40]}...")  # Display the progress message
+
             try:
-                print(f"Processing playlist: {playlist['name']}...")  # Debugging info
                 # Get playlist details
                 playlist_id = playlist['id']
                 name = playlist['name']
@@ -44,9 +51,6 @@ def get_all_playlists_with_details():
                         fields="items.track.duration_ms,next",
                         additional_types=["track"]
                     )
-                    track_count = len(tracks_response['items'])
-                    print(f"  Found {track_count} tracks at offset {track_offset}...")  # Debugging info
-
                     for track in tracks_response['items']:
                         if track['track']:
                             total_duration_ms += track['track']['duration_ms']
@@ -56,32 +60,46 @@ def get_all_playlists_with_details():
 
                     track_offset += 100
 
-                playlists.append({
+                # Final playlist details
+                playlist_info = {
                     "id": custom_id,
-                    "user": owner,
-                    "name": name,
+                    "user": truncate(owner, 40),
+                    "name": truncate(name, 40),
                     "duration": format_duration(total_duration_ms)
-                })
+                }
                 custom_id += 1
 
+                # Print the processing result
+                print(
+                    f"Finished processing: ID={playlist_info['id']} | User={playlist_info['user']} "
+                    f"| Name={playlist_info['name']} | Duration={playlist_info['duration']}"
+                )
+
+                # Yield the result
+                yield playlist_info
+
             except Exception as e:
-                print(f"  Error processing playlist {playlist['name']}: {str(e)}")
+                print(f"Error processing playlist {playlist['name'][:40]}: {str(e)}")
 
         if response['next'] is None:
             break
 
         offset += limit
 
-    return playlists
-
 
 if __name__ == "__main__":
-    print("Fetching all playlists...")
+    print("Fetching all playlists...\n")
+    playlist_data = []  # List to store all playlist details
+
     try:
-        playlists = get_all_playlists_with_details()
-        print(f"\nRetrieved {len(playlists)} playlists with details:")
-        for playlist in playlists:
-            print(f"{playlist['id']:>3}: {playlist['name']} by {playlist['user']} [{playlist['duration']}]")
+        for playlist in process_playlists():
+            # Add the playlist info to the list
+            playlist_data.append([playlist["id"], playlist["user"], playlist["name"], playlist["duration"]])
+
+        # Print the data in a table format
+        print("\nFinal Playlist Data:")
+        print(tabulate(playlist_data, headers=["ID", "User", "Name", "Duration"], tablefmt="grid"))
+
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
     except Exception as e:
