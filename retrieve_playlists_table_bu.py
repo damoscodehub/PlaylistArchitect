@@ -1,9 +1,10 @@
+print("retrieve_playlists_table module loaded successfully.")
+
 from tabulate import tabulate
 import spotipy
 from spotify_auth import sp  # Import the authenticated Spotify client
 import math
 import time
-
 
 def format_duration(milliseconds):
     """Convert a duration in milliseconds to the format hh:mm:ss."""
@@ -12,11 +13,9 @@ def format_duration(milliseconds):
     hours = minutes // 60
     return f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}"
 
-
 def truncate(text, length):
     """Truncate text to the specified length, adding '...' if necessary."""
     return text if len(text) <= length else text[:length - 3] + "..."
-
 
 def process_playlists():
     """
@@ -87,8 +86,9 @@ def process_playlists():
         offset += limit
 
 
-if __name__ == "__main__":
-    print("Fetching all playlists...\n")
+def display_playlists_table():
+    """Function to fetch and display all playlists in a tabular format."""
+    print("\nFetching all playlists...\n")
     playlist_data = []  # List to store all playlist details
 
     try:
@@ -104,3 +104,7 @@ if __name__ == "__main__":
         print("\nProcess interrupted by user.")
     except Exception as e:
         print(f"\nError: {str(e)}")
+
+
+if __name__ == "__main__":
+    display_playlists_table()  # Call the function to display the playlists in a table
