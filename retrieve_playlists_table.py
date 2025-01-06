@@ -1,10 +1,7 @@
-print("retrieve_playlists_table module loaded successfully.")
-
+import json
+import os
 from tabulate import tabulate
-import spotipy
 from spotify_auth import sp  # Import the authenticated Spotify client
-import math
-import time
 
 def format_duration(milliseconds):
     """Convert a duration in milliseconds to the format hh:mm:ss."""
@@ -62,6 +59,7 @@ def process_playlists():
                 # Final playlist details
                 playlist_info = {
                     "id": custom_id,
+                    "spotify_id": playlist_id,  # Include the Spotify playlist ID for internal use
                     "user": truncate(owner, 40),
                     "name": truncate(name, 40),
                     "duration": format_duration(total_duration_ms)
@@ -85,7 +83,6 @@ def process_playlists():
 
         offset += limit
 
-
 def get_all_playlists_with_details():
     """
     Fetch all playlists with detailed information.
@@ -98,14 +95,25 @@ def get_all_playlists_with_details():
         playlists.append(playlist)
     return playlists
 
+def save_playlists_to_file(playlists, filename="playlists_data.json"):
+    """Save playlists data to a file."""
+    with open(filename, "w") as file:
+        json.dump(playlists, file)
 
-def display_playlists_table():
-    """Function to fetch and display all playlists in a tabular format."""
+def load_playlists_from_file(filename="playlists_data.json"):
+    """Load playlists data from a file."""
+    if os.path.exists(filename):
+        with open(filename, "r") as file:
+            return json.load(file)
+    return []
+
+def display_playlists_table(playlists):
+    """Function to display playlists in a tabular format."""
     print("\nFetching all playlists...\n")
     playlist_data = []  # List to store all playlist details
 
     try:
-        for playlist in process_playlists():
+        for playlist in playlists:
             # Add the playlist info to the list
             playlist_data.append([playlist["id"], playlist["user"], playlist["name"], playlist["duration"]])
 
@@ -118,6 +126,7 @@ def display_playlists_table():
     except Exception as e:
         print(f"\nError: {str(e)}")
 
-
 if __name__ == "__main__":
-    display_playlists_table()  # Call the function to display the playlists in a table
+    playlists = get_all_playlists_with_details()
+    save_playlists_to_file(playlists)
+    display_playlists_table(playlists)

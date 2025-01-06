@@ -1,7 +1,6 @@
 import random
 from spotify_auth import sp
-from retrieve_playlists_table import get_all_playlists_with_details, format_duration, truncate
-
+from retrieve_playlists_table import format_duration, truncate
 
 def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_ms):
     """Fetch random songs from a playlist until the desired total duration is met."""
@@ -9,20 +8,21 @@ def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_
     track_offset = 0
     while True:
         tracks_response = sp.playlist_items(
-            playlist_id, 
+            playlist_id,  # Use the correct playlist_id
             offset=track_offset, 
-            fields="items.track.duration_ms,items.track.name", 
+            fields="items.track.uri,items.track.duration_ms,items.track.name", 
             additional_types=["track"]
         )
 
         for track in tracks_response['items']:
             if track['track']:
                 song_list.append({
+                    "uri": track['track']['uri'],
                     "name": track['track']['name'],
                     "duration_ms": track['track']['duration_ms']
                 })
 
-        if not tracks_response['next']:
+        if 'next' not in tracks_response or not tracks_response['next']:
             break
         track_offset += 100
 
@@ -36,8 +36,7 @@ def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_
 
     return selected_songs, total_time
 
-
-def create_new_playlist():
+def create_new_playlist(playlists):
     """Handle the creation of a new playlist."""
     # 1. Prompt for new playlist details
     playlist_name = input("Enter a name for the new playlist: ").strip()
@@ -60,9 +59,8 @@ def create_new_playlist():
     acceptable_deviation_ms = int(acceptable_deviation_input) * 60 * 1000
 
     # 2. Select playlists for random song selection
-    all_playlists = list(get_all_playlists_with_details())
     print("Available playlists:")
-    for playlist in all_playlists:
+    for playlist in playlists:
         print(f"{playlist['id']}: {playlist['name']}")
 
     selected_playlists = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip().split(",")
@@ -72,7 +70,8 @@ def create_new_playlist():
     all_selected_songs = []
     for playlist_id in selected_playlists:
         print(f"Fetching songs from playlist {playlist_id}...")
-        songs, total_time = get_song_from_playlist(all_playlists[playlist_id - 1]['id'], total_duration_ms, acceptable_deviation_ms)
+        spotify_playlist_id = playlists[playlist_id - 1]['spotify_id']  # Use the correct Spotify playlist ID
+        songs, total_time = get_song_from_playlist(spotify_playlist_id, total_duration_ms, acceptable_deviation_ms)
         all_selected_songs.extend(songs)
         print(f"Fetched {len(songs)} songs totaling {format_duration(total_time)}.")
 
@@ -85,7 +84,7 @@ def create_new_playlist():
             hours, minutes, seconds = map(int, new_time_input.split(":"))
             additional_time_ms = (hours * 3600 + minutes * 60 + seconds) * 1000
             new_songs, new_time = get_song_from_playlist(
-                all_playlists[playlist_id - 1]['id'], additional_time_ms, acceptable_deviation_ms
+                spotify_playlist_id, additional_time_ms, acceptable_deviation_ms
             )
             all_selected_songs.extend(new_songs)
             print(f"Fetched {len(new_songs)} additional songs totaling {format_duration(new_time)}.")
@@ -95,6 +94,7 @@ def create_new_playlist():
     # 5. Commit the new playlist
     final_playlist_name = truncate(playlist_name, 40)
     playlist = sp.user_playlist_create(sp.current_user()['id'], final_playlist_name, public=(privacy == "public"))
-    track_uris = [f"spotify:track:{track['uri']}" for track in all_selected_songs]
+    track_uris = [track['uri'] for track in all_selected_songs]  # Correctly format the track URIs
+    print(f"Track URIs to be added: {track_uris}")  # Debug print to check URIs
     sp.playlist_add_items(playlist['id'], track_uris)
     print(f"New playlist '{final_playlist_name}' created with {len(all_selected_songs)} songs.")
