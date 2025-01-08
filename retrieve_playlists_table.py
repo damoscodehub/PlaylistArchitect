@@ -1,7 +1,10 @@
 import json
 import os
 from tabulate import tabulate
-from spotify_auth import sp  # Import the authenticated Spotify client
+from spotify_auth import get_spotify_client
+import sys
+
+sp = get_spotify_client()
 
 def format_duration(milliseconds):
     """Convert a duration in milliseconds to the format hh:mm:ss."""
@@ -109,6 +112,9 @@ def load_playlists_from_file(filename="playlists_data.json"):
 
 def display_playlists_table(playlists):
     """Function to display playlists in a tabular format."""
+    # Clear the terminal
+    os.system('cls' if os.name == 'nt' else 'clear')
+
     print("\nFetching all playlists...\n")
     playlist_data = []  # List to store all playlist details
 
@@ -117,9 +123,15 @@ def display_playlists_table(playlists):
             # Add the playlist info to the list
             playlist_data.append([playlist["id"], playlist["user"], playlist["name"], playlist["duration"]])
 
+        # Debug print to check the data before displaying
+        print(f"Debug: Playlist data to be displayed: {playlist_data}")
+
         # Print the data in a table format
         print("\nFinal Playlist Data:")
         print(tabulate(playlist_data, headers=["ID", "User", "Name", "Duration"], tablefmt="grid"))
+
+        # Flush the output buffer
+        sys.stdout.flush()
 
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
