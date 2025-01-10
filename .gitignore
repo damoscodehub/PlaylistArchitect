@@ -1,6 +1,9 @@
 .spotify_cache
 playlists_data.json
+.spotify_cache_out
 Backups/
+Code_83cJyasG0Y.png
+ignore/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

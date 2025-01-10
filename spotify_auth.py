@@ -14,7 +14,7 @@ def get_spotify_client():
         client_id=os.getenv("SPOTIPY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),
-        scope="user-library-read user-library-modify playlist-read-private playlist-modify-public playlist-modify-private",
+        scope="user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private",
         cache_path=cache_path,
         open_browser=True  # This will automatically open your browser
     ))

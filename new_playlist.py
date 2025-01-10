@@ -1,6 +1,8 @@
-import random
-from spotify_auth import sp
+from spotify_auth import get_spotify_client
 from retrieve_playlists_table import format_duration, truncate, display_playlists_table
+import random
+
+sp = get_spotify_client()
 
 def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_ms):
     """Fetch random songs from a playlist until the desired total duration is met."""
@@ -8,7 +10,7 @@ def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_
     track_offset = 0
     while True:
         tracks_response = sp.playlist_items(
-            playlist_id,  # Use the correct playlist_id
+            playlist_id,
             offset=track_offset, 
             fields="items.track.uri,items.track.duration_ms,items.track.name", 
             additional_types=["track"]
