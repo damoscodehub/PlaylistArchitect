@@ -29,7 +29,7 @@ def main():
         print("6. Clear Spotify authentication")
         print("7. Exit")
 
-        choice = input("Enter your choice (1/2/3/4/5/6/7): ").strip()
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
             create_new_playlist(playlists)  # Call the new playlist creation process
@@ -44,18 +44,30 @@ def main():
         elif choice == "5":
             backup_options(playlists)  # Call the backup options menu
         elif choice == "6":
-            clear_cached_token()  # Clear the cached Spotify authentication token
-            sp = get_spotify_client()  # Re-authenticate with Spotify
-            try:
-                user = sp.current_user()
-                print(f"Successfully connected to Spotify as {user['display_name']}")
-            except Exception as e:
-                print(f"Error: {str(e)}")
+            print("\nSelect an option:")
+            print("1. Clear now (it will restart the authentication process immediately)")
+            print("2. Clear at exit (it will run the authentication process next time the app is executed)")
+            sub_choice = input("Enter your choice: ").strip()
+            if sub_choice == "1":
+                clear_cached_token()  # Clear the cached Spotify authentication token
+                sp = get_spotify_client()  # Re-authenticate with Spotify
+                try:
+                    user = sp.current_user()
+                    print(f"Successfully connected to Spotify as {user['display_name']}")
+                except Exception as e:
+                    print(f"Error: {str(e)}")
+            elif sub_choice == "2":
+                clear_at_exit = True
+                print("Spotify authentication will be cleared at exit.")
+            else:
+                print("Invalid option. Please try again.")
         elif choice == "7":
+            if clear_at_exit:
+                clear_cached_token()
             print("Exiting program.")
             break
         else:
             print("Invalid option. Please try again.")
-
+            
 if __name__ == "__main__":
     main()
