@@ -1,9 +1,10 @@
 import json
 import os
-from retrieve_playlists_table import display_playlists_table
+from retrieve_playlists_table import display_playlists_table, save_playlists_to_file
 from spotify_auth import get_spotify_client
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
+from helpers import assign_temporary_ids  # Import the helper function
 
 sp = get_spotify_client()
 
@@ -63,7 +64,7 @@ def export_playlists(playlists, selected_ids=None):
         print("Export canceled.")
     root.destroy()
 
-def import_playlists():
+def import_playlists(playlists):
     """Import playlists from a file."""
     root = None
     try:
@@ -114,7 +115,10 @@ def import_playlists():
             else:
                 print(f"Playlist '{playlist['name']}' has no tracks to add.")
 
-        print("Playlists imported successfully.")
+        # Update the cached playlists data
+        playlists.extend(imported_playlists)
+        save_playlists_to_file(playlists)
+        print("Playlists imported and cache updated.")
     except Exception as e:
         print(f"Error during import: {str(e)}")
     finally:
@@ -129,20 +133,17 @@ def backup_options(playlists):
         print("2. Import")
         print("3. Main menu")
 
-        choice = input("Enter your choice (1/2/3): ").strip()
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
             print("\nSelect an option:")
             print("1. A selection of saved/created playlists.")
             print("2. All the saved/created playlists.")
 
-            export_choice = input("Enter your choice (1/2): ").strip()
+            export_choice = input("Enter your choice: ").strip()
 
             if export_choice == "1":
-                # Add temporary 'id' field for display purposes
-                for idx, playlist in enumerate(playlists, start=1):
-                    playlist['id'] = idx
-
+                assign_temporary_ids(playlists)  # Assign temporary IDs before displaying
                 display_playlists_table(playlists)
 
                 # Remove the temporary 'id' field after display
@@ -158,7 +159,7 @@ def backup_options(playlists):
             else:
                 print("Invalid option. Please try again.")
         elif choice == "2":
-            import_playlists()
+            import_playlists(playlists)
         elif choice == "3":
             break
         else:

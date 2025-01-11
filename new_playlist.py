@@ -105,7 +105,7 @@ def create_new_playlist(playlists):
 
         # Prompt for next action
         while True:
-            next_action = input("Select an option:\n1. Add more songs\n2. Save the playlist\n3. Cancel\nEnter your choice (1/2/3): ").strip()
+            next_action = input("Select an option:\n1. Add more songs\n2. Save the playlist\n3. Cancel\nEnter your choice: ").strip()
             if next_action == "1":
                 break  # Continue the loop to add more songs
             elif next_action == "2":
@@ -116,6 +116,16 @@ def create_new_playlist(playlists):
                 print(f"Track URIs to be added: {track_uris}")  # Debug print to check URIs
                 sp.playlist_add_items(playlist['id'], track_uris)
                 print(f"New playlist '{final_playlist_name}' created with {len(all_selected_songs)} songs.")
+
+                # Update cached playlists data
+                new_playlist_info = {
+                    "id": len(playlists) + 1,
+                    "spotify_id": playlist['id'],
+                    "user": truncate(sp.current_user()['display_name'], 40),
+                    "name": truncate(final_playlist_name, 40),
+                    "duration": format_duration(sum(track['duration_ms'] for track in all_selected_songs))
+                }
+                playlists.append(new_playlist_info)
                 return  # Exit the function
             elif next_action == "3":
                 print("Playlist creation canceled.")

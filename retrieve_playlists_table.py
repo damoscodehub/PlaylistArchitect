@@ -101,7 +101,7 @@ def load_playlists_from_file(filename="playlists_data.json"):
 
 def display_playlists_table(playlists):
     """Display playlists in a tabular format."""
-    os.system('cls' if os.name == 'nt' else 'clear')
+    # os.system('cls' if os.name == 'nt' else 'clear') # Clear the console
 
     print("\nFetching all playlists...\n")
     playlist_data = []
