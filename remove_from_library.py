@@ -8,7 +8,7 @@ def remove_playlists_from_library(sp, playlists):
         print("2. All playlists")
         print("3. Back")
 
-        choice = input("Enter your choice (1/2/3): ").strip()
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
             remove_selected_playlists(sp, playlists)
@@ -70,7 +70,7 @@ def remove_selected_playlists(sp, playlists):
             print("3. Remove selected playlists from Your Library")
             print("4. Cancel")
 
-            sub_choice = input("Enter your choice (1/2/3/4): ").strip()
+            sub_choice = input("Enter your choice: ").strip()
 
             if sub_choice == "1":
                 assign_temporary_ids(selected_playlists)  # Assign temporary IDs before displaying
@@ -114,7 +114,7 @@ def edit_selection(selected_playlists, playlists):
         print("2. Remove one or more playlists from this selection")
         print("3. Back")
 
-        choice = input("Enter your choice (1/2/3): ").strip()
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
             assign_temporary_ids(playlists)  # Assign temporary IDs before displaying

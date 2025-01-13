@@ -1,5 +1,6 @@
 from spotify_auth import get_spotify_client
-from retrieve_playlists_table import format_duration, truncate, display_playlists_table
+from retrieve_playlists_table import format_duration, truncate, display_playlists_table, save_playlists_to_file
+from helpers import assign_temporary_ids  # Import the helper function
 import random
 
 sp = get_spotify_client()
@@ -56,6 +57,9 @@ def create_new_playlist(playlists):
     all_selected_songs = []
 
     while True:
+        # Assign temporary IDs before displaying
+        assign_temporary_ids(playlists)
+        
         # Display available playlists as a table
         display_playlists_table(playlists)
 
@@ -126,9 +130,15 @@ def create_new_playlist(playlists):
                     "duration": format_duration(sum(track['duration_ms'] for track in all_selected_songs))
                 }
                 playlists.append(new_playlist_info)
+                save_playlists_to_file(playlists)  # Update cached playlists data
                 return  # Exit the function
             elif next_action == "3":
                 print("Playlist creation canceled.")
                 return  # Exit the function
             else:
                 print("Invalid option. Please try again.")
+
+        # Remove the temporary 'id' field after display
+        for playlist in playlists:
+            if 'id' in playlist:
+                del playlist['id']

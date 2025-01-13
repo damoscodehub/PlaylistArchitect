@@ -1,15 +1,23 @@
 import json
-import os
-from retrieve_playlists_table import display_playlists_table, save_playlists_to_file
+import logging
+from retrieve_playlists_table import display_playlists_table, save_playlists_to_file, format_duration
 from spotify_auth import get_spotify_client
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-from helpers import assign_temporary_ids  # Import the helper function
+from helpers import assign_temporary_ids
+from spotipy.exceptions import SpotifyException
+
+# Configure spotipy logging
+logging.getLogger('spotipy').setLevel(logging.ERROR)
+
 
 sp = get_spotify_client()
 
 def export_playlists(playlists, selected_ids=None):
     """Export selected or all playlists to a file."""
+    # Assign temporary IDs before filtering
+    assign_temporary_ids(playlists)
+    
     if selected_ids:
         playlists_to_export = [playlist for playlist in playlists if playlist['id'] in selected_ids]
     else:
@@ -25,7 +33,7 @@ def export_playlists(playlists, selected_ids=None):
             tracks_response = sp.playlist_items(
                 playlist_id,
                 offset=track_offset,
-                fields="items.track.uri,items.track.name,items.track.artists,items.track.album.name,next",
+                fields="items.track.uri,items.track.name,items.track.artists,items.track.album.name,items.track.duration_ms,next",
                 additional_types=["track"]
             )
             for track in tracks_response['items']:
@@ -34,7 +42,8 @@ def export_playlists(playlists, selected_ids=None):
                         "uri": track['track']['uri'],
                         "name": track['track']['name'],
                         "artists": [artist['name'] for artist in track['track']['artists']],
-                        "album": track['track']['album']['name']
+                        "album": track['track']['album']['name'],
+                        "duration_ms": track['track'].get('duration_ms', 0)
                     })
             if not tracks_response['next']:
                 break
@@ -64,16 +73,16 @@ def export_playlists(playlists, selected_ids=None):
         print("Export canceled.")
     root.destroy()
 
-def import_playlists(playlists):
+def import_playlists(playlists, option):
     """Import playlists from a file."""
     root = None
     try:
         print("Initializing Tkinter...")
         root = Tk()
-        root.withdraw()  # Hide the root window
-        root.attributes('-topmost', True)  # Keep the root window on top
-        root.lift()  # Bring the root window to the front
-        root.focus_force()  # Focus on the root window
+        root.withdraw()
+        root.attributes('-topmost', True)
+        root.lift()
+        root.focus_force()
 
         print("Opening file dialog...")
         file_path = askopenfilename(title="Select a backup file", filetypes=[("JSON files", "*.json")])
@@ -90,40 +99,79 @@ def import_playlists(playlists):
 
         print("Playlists loaded from file.")
 
-        # Recreate playlists in the connected account
-        existing_playlists = sp.current_user_playlists(limit=50)['items']
-        existing_playlists_names = {playlist['name']: playlist for playlist in existing_playlists}
+        # Debug: Print structure of first playlist
+        if imported_playlists:
+            print(f"Debug: Keys in first playlist: {imported_playlists[0].keys()}")
+
+        # Recreate or follow playlists in the connected account
+        total_tracks = 0
+        total_duration_ms = 0
 
         for playlist in imported_playlists:
-            if playlist['name'] in existing_playlists_names:
-                existing_playlist = existing_playlists_names[playlist['name']]
-                existing_tracks = sp.playlist_tracks(existing_playlist['id'])['items']
-                existing_track_uris = [track['track']['uri'] for track in existing_tracks]
+            if option == "1":
+                recreate_playlist(sp, playlist)
+            elif option == "2":
+                if not follow_playlist(sp, playlist):
+                    recreate_playlist(sp, playlist)
+            elif option == "3":
+                follow_playlist(sp, playlist)
 
-                imported_track_uris = [track['uri'] for track in playlist['tracks']]
-                if existing_track_uris == imported_track_uris:
-                    print(f"Playlist '{playlist['name']}' already exists with the same tracks. Skipping.")
-                    continue
-
-            # Create the playlist
-            new_playlist = sp.user_playlist_create(sp.current_user()['id'], playlist['name'], public=True)
-            track_uris = [track['uri'] for track in playlist['tracks'] if 'uri' in track]
-            if track_uris:
-                for i in range(0, len(track_uris), 100):
-                    sp.playlist_add_items(new_playlist['id'], track_uris[i:i+100])
-                print(f"Playlist '{playlist['name']}' created with {len(track_uris)} tracks.")
+            # Use the duration field if it exists, otherwise calculate from tracks
+            if 'duration' in playlist:
+                # Convert HH:MM:SS to milliseconds
+                time_parts = playlist['duration'].split(':')
+                duration_ms = (int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + int(time_parts[2])) * 1000
+                total_duration_ms += duration_ms
             else:
-                print(f"Playlist '{playlist['name']}' has no tracks to add.")
+                # Fallback to tracks duration_ms
+                playlist_duration = sum(track.get('duration_ms', 0) for track in playlist['tracks'])
+                total_duration_ms += playlist_duration
+
+            total_tracks += len(playlist['tracks'])
 
         # Update the cached playlists data
         playlists.extend(imported_playlists)
         save_playlists_to_file(playlists)
-        print("Playlists imported and cache updated.")
+
+        # Format and display total duration
+        formatted_duration = format_duration(total_duration_ms)
+        print(f"Import complete with:\n{len(imported_playlists)} playlists, {total_tracks} tracks, {formatted_duration} hours total.")
     except Exception as e:
         print(f"Error during import: {str(e)}")
+        import traceback
+        traceback.print_exc()
     finally:
         if root:
             root.destroy()
+                         
+def recreate_playlist(sp, playlist):
+    """Recreate a playlist in the user's account."""
+    new_playlist = sp.user_playlist_create(sp.current_user()['id'], playlist['name'], public=True)
+    track_uris = [track['uri'] for track in playlist['tracks'] if 'uri' in track]
+    if track_uris:
+        for i in range(0, len(track_uris), 100):
+            sp.playlist_add_items(new_playlist['id'], track_uris[i:i+100])
+        print(f"Playlist '{playlist['name']}' created with {len(track_uris)} tracks.")
+    else:
+        print(f"Playlist '{playlist['name']}' has no tracks to add.")
+
+def follow_playlist(sp, playlist):
+    """Attempt to follow a playlist. Return True if successful, False otherwise."""
+    try:
+        # Catch specific Spotipy exception        
+        try:
+            sp.current_user_follow_playlist(playlist['spotify_id'])
+            print(f"Followed playlist '{playlist['name']}'")
+            return True
+        except SpotifyException as e:
+            if e.http_status == 404:
+                print(f"Could not follow playlist '{playlist['name']}': Playlist not found or private.")
+            else:
+                print(f"Could not follow playlist '{playlist['name']}': {e.msg}")
+            return False
+    except Exception as e:
+        print(f"Could not follow playlist '{playlist['name']}': {str(e)}")
+        return False
 
 def backup_options(playlists):
     """Display backup options menu."""
@@ -159,7 +207,17 @@ def backup_options(playlists):
             else:
                 print("Invalid option. Please try again.")
         elif choice == "2":
-            import_playlists(playlists)
+            print("\nSelect an option:")
+            print("1. Recreate all playlists (you will be the author)")
+            print("2. Add original playlists to Your Library if possible and recreate the rest")
+            print("3. Add original playlists to Your Library and ignore the rest")
+
+            import_choice = input("Enter your choice: ").strip()
+
+            if import_choice in ["1", "2", "3"]:
+                import_playlists(playlists, import_choice)
+            else:
+                print("Invalid option. Please try again.")
         elif choice == "3":
             break
         else:
