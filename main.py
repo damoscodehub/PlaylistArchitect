@@ -1,23 +1,9 @@
-import logging
 from spotify_auth import get_spotify_client, clear_cached_token
 from retrieve_playlists_table import get_all_playlists_with_details, save_playlists_to_file, load_playlists_from_file, display_playlists_table
 from backup import backup_options, import_playlists
 from new_playlist import create_new_playlist
 from remove_from_library import remove_playlists_from_library
-from helpers import assign_temporary_ids  # Import the helper function
-
-# Configure root logger first
-logging.basicConfig(level=logging.CRITICAL)
-
-# Configure specific loggers
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.CRITICAL)
-
-# Silence all related loggers
-for logger_name in ['spotipy', 'urllib3', 'requests', 'charset_normalizer']:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.CRITICAL)
-    logger.propagate = False
+from helpers import assign_temporary_ids
 
 def main():
     sp = get_spotify_client()

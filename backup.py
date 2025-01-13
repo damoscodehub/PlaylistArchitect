@@ -1,15 +1,10 @@
 import json
-import logging
 from retrieve_playlists_table import display_playlists_table, save_playlists_to_file, format_duration
 from spotify_auth import get_spotify_client
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from helpers import assign_temporary_ids
 from spotipy.exceptions import SpotifyException
-
-# Configure spotipy logging
-logging.getLogger('spotipy').setLevel(logging.ERROR)
-
 
 sp = get_spotify_client()
 
@@ -106,36 +101,46 @@ def import_playlists(playlists, option):
         # Recreate or follow playlists in the connected account
         total_tracks = 0
         total_duration_ms = 0
+        successful_imports = []
+
+        # Create set of existing spotify_ids
+        existing_ids = {pl['spotify_id'] for pl in playlists if 'spotify_id' in pl}
 
         for playlist in imported_playlists:
+            # Skip if already in cache
+            if playlist['spotify_id'] in existing_ids:
+                print(f"Playlist '{playlist['name']}' already in cache - skipping")
+                continue
+
+            success = False
             if option == "1":
-                recreate_playlist(sp, playlist)
+                success = recreate_playlist(sp, playlist)
             elif option == "2":
                 if not follow_playlist(sp, playlist):
-                    recreate_playlist(sp, playlist)
+                    success = recreate_playlist(sp, playlist)
+                else:
+                    success = True and not is_playlist_followed(sp, playlist['spotify_id'])
             elif option == "3":
-                follow_playlist(sp, playlist)
+                success = follow_playlist(sp, playlist) and not is_playlist_followed(sp, playlist['spotify_id'])
 
-            # Use the duration field if it exists, otherwise calculate from tracks
-            if 'duration' in playlist:
-                # Convert HH:MM:SS to milliseconds
-                time_parts = playlist['duration'].split(':')
-                duration_ms = (int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + int(time_parts[2])) * 1000
-                total_duration_ms += duration_ms
-            else:
-                # Fallback to tracks duration_ms
-                playlist_duration = sum(track.get('duration_ms', 0) for track in playlist['tracks'])
-                total_duration_ms += playlist_duration
+            if success:
+                successful_imports.append(playlist)
+                existing_ids.add(playlist['spotify_id'])
+                if 'duration' in playlist:
+                    time_parts = playlist['duration'].split(':')
+                    duration_ms = (int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + int(time_parts[2])) * 1000
+                    total_duration_ms += duration_ms
+                else:
+                    playlist_duration = sum(track.get('duration_ms', 0) for track in playlist['tracks'])
+                    total_duration_ms += playlist_duration
+                total_tracks += len(playlist['tracks'])
 
-            total_tracks += len(playlist['tracks'])
-
-        # Update the cached playlists data
-        playlists.extend(imported_playlists)
+        # Only extend with truly new playlists
+        playlists.extend(successful_imports)
         save_playlists_to_file(playlists)
 
-        # Format and display total duration
         formatted_duration = format_duration(total_duration_ms)
-        print(f"Import complete with:\n{len(imported_playlists)} playlists, {total_tracks} tracks, {formatted_duration} hours total.")
+        print(f"Import complete with:\n{len(successful_imports)} new playlists, {total_tracks} tracks, {formatted_duration} hours total.")
     except Exception as e:
         print(f"Error during import: {str(e)}")
         import traceback
@@ -146,19 +151,37 @@ def import_playlists(playlists, option):
                          
 def recreate_playlist(sp, playlist):
     """Recreate a playlist in the user's account."""
-    new_playlist = sp.user_playlist_create(sp.current_user()['id'], playlist['name'], public=True)
-    track_uris = [track['uri'] for track in playlist['tracks'] if 'uri' in track]
-    if track_uris:
-        for i in range(0, len(track_uris), 100):
-            sp.playlist_add_items(new_playlist['id'], track_uris[i:i+100])
-        print(f"Playlist '{playlist['name']}' created with {len(track_uris)} tracks.")
-    else:
-        print(f"Playlist '{playlist['name']}' has no tracks to add.")
+    try:
+        new_playlist = sp.user_playlist_create(sp.current_user()['id'], playlist['name'], public=True)
+        track_uris = [track['uri'] for track in playlist['tracks'] if 'uri' in track]
+        if track_uris:
+            for i in range(0, len(track_uris), 100):
+                sp.playlist_add_items(new_playlist['id'], track_uris[i:i+100])
+            print(f"Playlist '{playlist['name']}' created with {len(track_uris)} tracks.")
+        else:
+            print(f"Playlist '{playlist['name']}' has no tracks to add.")
+        return True
+    except Exception as e:
+        print(f"Failed to recreate playlist '{playlist['name']}': {str(e)}")
+        return False
 
+def is_playlist_followed(sp, playlist_id):
+    """Check if user already follows a playlist."""
+    try:
+        follows = sp.current_user_playlists()
+        return any(pl['id'] == playlist_id for pl in follows['items'])
+    except Exception:
+        return False
+    
 def follow_playlist(sp, playlist):
     """Attempt to follow a playlist. Return True if successful, False otherwise."""
     try:
-        # Catch specific Spotipy exception        
+        # Check if already followed
+        if is_playlist_followed(sp, playlist['spotify_id']):
+            print(f"Playlist '{playlist['name']}' is already in Your Library - skipping")
+            return True
+            
+        # If not followed, try to follow
         try:
             sp.current_user_follow_playlist(playlist['spotify_id'])
             print(f"Followed playlist '{playlist['name']}'")
