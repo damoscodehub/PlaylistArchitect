@@ -1,5 +1,5 @@
 from retrieve_playlists_table import display_playlists_table, save_playlists_to_file
-from helpers import assign_temporary_ids  # Import the helper function
+from utils.helpers import assign_temporary_ids  # Import the helper function
 
 def remove_playlists_from_library(sp, playlists):
     while True:

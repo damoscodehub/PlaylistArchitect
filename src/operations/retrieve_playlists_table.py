@@ -1,7 +1,7 @@
 import json
 import os
 from tabulate import tabulate
-from spotify_auth import get_spotify_client
+from auth.spotify_auth import get_spotify_client
 import sys
 
 sp = get_spotify_client()
@@ -89,13 +89,15 @@ def get_all_playlists_with_details():
 
 def save_playlists_to_file(playlists, filename="playlists_data.json"):
     """Save playlists data to a file."""
-    with open(filename, "w") as file:
+    filepath = os.path.join("src", "data", filename)  # Build the path dynamically
+    with open(filepath, "w") as file:
         json.dump(playlists, file)
 
 def load_playlists_from_file(filename="playlists_data.json"):
     """Load playlists data from a file."""
-    if os.path.exists(filename):
-        with open(filename, "r") as file:
+    filepath = os.path.join("src", "data", filename)  # Build the path dynamically
+    if os.path.exists(filepath):
+        with open(filepath, "r") as file:
             return json.load(file)
     return []
 
@@ -103,7 +105,7 @@ def display_playlists_table(playlists):
     """Display playlists in a tabular format."""
     # os.system('cls' if os.name == 'nt' else 'clear') # Clear the console
 
-    print("\nFetching all playlists...\n")
+    print("\n")
     playlist_data = []
 
     try:

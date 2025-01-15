@@ -4,7 +4,7 @@ playlists_data.json
 Backups/
 Code_83cJyasG0Y.png
 ignore/
-
+src/data/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
