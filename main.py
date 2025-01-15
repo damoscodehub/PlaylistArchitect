@@ -1,9 +1,10 @@
-from spotify_auth import get_spotify_client, clear_cached_token
-from retrieve_playlists_table import get_all_playlists_with_details, save_playlists_to_file, load_playlists_from_file, display_playlists_table
-from backup import backup_options, import_playlists
-from new_playlist import create_new_playlist
-from remove_from_library import remove_playlists_from_library
-from helpers import assign_temporary_ids
+from src.auth.spotify_auth import get_spotify_client, clear_cached_token
+from src.operations.retrieve_playlists_table import get_all_playlists_with_details, save_playlists_to_file, load_playlists_from_file, display_playlists_table
+from src.operations.backup import backup_options, import_playlists
+from src.operations.new_playlist import create_new_playlist
+from src.operations.remove_from_library import remove_playlists_from_library
+from src.utils.api_helpers import assign_temporary_ids
+
 
 def main():
     sp = get_spotify_client()

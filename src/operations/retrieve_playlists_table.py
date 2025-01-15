@@ -1,7 +1,7 @@
 import json
 import os
 from tabulate import tabulate
-from spotify_auth import get_spotify_client
+from src.auth.spotify_auth import get_spotify_client
 import sys
 
 sp = get_spotify_client()
