@@ -1,9 +1,9 @@
 import json
-from retrieve_playlists_table import display_playlists_table, save_playlists_to_file, format_duration
-from auth.spotify_auth import get_spotify_client
+from src.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file, format_duration
+from src.auth.spotify_auth import get_spotify_client
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-from utils.helpers import assign_temporary_ids
+from src.utils.helpers import assign_temporary_ids
 from spotipy.exceptions import SpotifyException
 
 sp = get_spotify_client()
