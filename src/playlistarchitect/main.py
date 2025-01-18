@@ -26,7 +26,7 @@ def main():
         print("5. Backup options")
         print("6. Clear Spotify authentication")
         print("7. Exit")
-        choice = input("Enter your choice (1/2/3/4/5/6/7): ").strip()
+        choice = input("Enter your choice: ").strip()
 
         if choice == "1":
             create_new_playlist(playlists)  # Call the function to create a new playlist
