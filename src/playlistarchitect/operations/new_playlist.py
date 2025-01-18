@@ -1,6 +1,6 @@
-from auth.spotify_auth import get_spotify_client
-from operations.retrieve_playlists_table import format_duration, truncate, display_playlists_table, save_playlists_to_file
-from utils.helpers import assign_temporary_ids  # Import the helper function
+from playlistarchitect.auth.spotify_auth import get_spotify_client
+from playlistarchitect.operations.retrieve_playlists_table import format_duration, truncate, display_playlists_table, save_playlists_to_file
+from playlistarchitect.utils.helpers import assign_temporary_ids  # Import the helper function
 import random
 
 sp = get_spotify_client()

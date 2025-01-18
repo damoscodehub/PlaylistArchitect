@@ -4,6 +4,7 @@ from playlistarchitect.operations.backup import backup_options, import_playlists
 from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
 from playlistarchitect.utils.helpers import assign_temporary_ids
+import sys
 
 def main():
     sp = get_spotify_client()
@@ -74,4 +75,8 @@ def main():
             print("Invalid option. Please try again.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user. Exiting the application...")
+        sys.exit(0)  # Exit gracefully
