@@ -1,4 +1,9 @@
 from datetime import timedelta
+import logging
+
+# Configure the logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def parse_time_input(time_str):
@@ -25,27 +30,73 @@ def assign_temporary_ids(playlists):
     for idx, playlist in enumerate(playlists, start=1):
         playlist['id'] = idx
         
-
-def menu_navigation(options, prompt="Select an option:", cancel_text="Cancel", back_text="Back"):
+            
+def get_validated_input(prompt, valid_options=None, input_type=str):
     """
-    Reusable function to handle menu navigation.
+    Prompt the user for input and validate it.
     Args:
-        options (list): A list of menu options to display.
-        prompt (str): The prompt to display to the user.
-        cancel_text (str): Text to recognize as "Cancel".
-        back_text (str): Text to recognize as "Back".
+        prompt (str): The message to display to the user.
+        valid_options (list): A list of acceptable inputs (optional).
+        input_type (type): The expected type of input (e.g., int, str).
     Returns:
-        int or str: The option number (1-based index), "back", or "cancel".
+        The validated user input.
     """
     while True:
-        print("\n" + "\n".join([f"{i}. {option}" for i, option in enumerate(options, 1)]))
-        choice = input(f"{prompt} ").strip()
+        try:
+            user_input = input(prompt).strip()
+            # Convert input to the desired type
+            user_input = input_type(user_input)
 
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            return int(choice)
-        elif back_text and choice.lower() in ["b", "back"]:
-            return "back"
-        elif cancel_text and choice.lower() in ["c", "cancel"]:
-            return "cancel"
-        else:
-            print("Invalid input. Please try again.")
+            # Check if input is in valid options
+            if valid_options and user_input not in valid_options:
+                print(f"Invalid option. Please choose from {valid_options}.")
+                continue
+
+            return user_input
+        except ValueError:
+            print(f"Invalid input. Please enter a valid {input_type.__name__}.")
+            
+            
+def menu_navigation(options: dict, prompt="Select an option:"):
+    """
+    Reusable function to handle menu navigation with flexible keys for back and cancel.
+    Args:
+        options (dict): A dictionary of menu options where keys can map to constants like CANCEL_OPTION or BACK_OPTION.
+        prompt (str): The prompt to display to the user.
+    Returns:
+        str: The selected key (e.g., "1", "a", BACK_OPTION, or CANCEL_OPTION).
+    """
+    # Display the menu
+    print("\n" + "\n".join([f"{key}. {value}" for key, value in options.items()]))
+
+    # Validate the user's input
+    choice = get_validated_input(
+        prompt=f"{prompt} ",
+        valid_options=options.keys(),  # Validate against dictionary keys
+        input_type=str
+    )
+
+    return choice  # Return the key directly
+
+
+def log_and_print(message: str, level: str="info") -> None:
+    """
+    Logs and prints a message simultaneously.
+    Args:
+        message (str): The message to log and print.
+        level (str): The logging level ("info", "warning", "error", etc.).
+    """
+    # Log the message at the specified level
+    if level == "info":
+        logger.info(message)
+    elif level == "warning":
+        logger.warning(message)
+    elif level == "error":
+        logger.error(message)
+    elif level == "debug":
+        logger.debug(message)
+    else:
+        logger.info(message)  # Default to "info" if level is unrecognized
+
+    # Print the message
+    print(message)

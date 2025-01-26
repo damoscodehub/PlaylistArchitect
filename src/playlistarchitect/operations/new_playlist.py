@@ -1,198 +1,249 @@
 from playlistarchitect.auth.spotify_auth import get_spotify_client
 from playlistarchitect.operations.retrieve_playlists_table import (
     display_playlists_table,
+    save_playlists_to_file,
+    display_selected_playlists,
+    format_duration,
 )
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation, parse_time_input, get_variation_input
 import random
 
 sp = get_spotify_client()
 
-def get_song_from_playlist(playlist_id, total_duration_ms, acceptable_deviation_ms):
-    """Fetch random songs from a playlist until the desired total duration is met."""
+
+def get_songs_from_playlist(playlist_id, total_duration_ms=None, acceptable_deviation_ms=None):
+    """Fetch songs from a playlist, optionally limiting by duration."""
     song_list = []
     track_offset = 0
+
     while True:
-        tracks_response = sp.playlist_items(
-            playlist_id,
-            offset=track_offset,
-            fields="items.track.uri,items.track.duration_ms,items.track.name",
-            additional_types=["track"]
-        )
+        try:
+            tracks_response = sp.playlist_items(
+                playlist_id,
+                offset=track_offset,
+                fields="items.track.uri,items.track.duration_ms,items.track.name",
+                additional_types=["track"],
+            )
+            if "items" in tracks_response:
+                for track in tracks_response["items"]:
+                    if track.get("track"):  # Check if track exists
+                        song_list.append(
+                            {
+                                "uri": track["track"].get("uri"),
+                                "name": track["track"].get("name"),
+                                "duration_ms": track["track"].get("duration_ms", 0),
+                            }
+                        )
+        except Exception as e:
+            print(f"Error fetching playlist items: {e}")
+            break
 
-        for track in tracks_response['items']:
-            if track['track']:
-                song_list.append({
-                    "uri": track['track']['uri'],
-                    "name": track['track']['name'],
-                    "duration_ms": track['track']['duration_ms']
-                })
-
-        if 'next' not in tracks_response or not tracks_response['next']:
+        if not tracks_response.get("next"):
             break
         track_offset += 100
 
-    # Randomly pick songs until total duration is close to the target duration
-    selected_songs = []
-    total_time = 0
-    while total_time < total_duration_ms - acceptable_deviation_ms:
-        song = random.choice(song_list)
-        selected_songs.append(song)
-        total_time += song['duration_ms']
+    if total_duration_ms is None:
+        return song_list, sum(song["duration_ms"] for song in song_list)
 
-    return selected_songs, total_time
+    # Randomly pick songs until total duration is close to target
+    selected_songs = []
+    current_duration = 0
+    available_songs = song_list.copy()
+
+    while available_songs and current_duration < total_duration_ms - acceptable_deviation_ms:
+        song = random.choice(available_songs)
+        if current_duration + song["duration_ms"] <= total_duration_ms + acceptable_deviation_ms:
+            selected_songs.append(song)
+            current_duration += song["duration_ms"]
+        available_songs.remove(song)
+
+    return selected_songs, current_duration
 
 
 def create_new_playlist(playlists):
-    """Handle the creation of a new playlist using the menu_navigation system."""
+    """Handle the creation of a new playlist with advanced options."""
     all_selected_songs = []
     shuffle_option = "No shuffle"
     time_option = "Not specified"
     selected_playlists = []
-    
-    #Prompt for new playlist details
+
+    # Get playlist details
     playlist_name = input("Enter a name for the new playlist: ").strip()
 
-    # Loop to get valid privacy choice
-    while True:
-        privacy = input("Choose privacy (1. Public, 2. Private): ").strip()
-        if privacy == "1":
-            privacy = "public"
-            break
-        elif privacy == "2":
-            privacy = "private"
-            break
-        else:
-            print("Invalid choice. Please choose either 1 for Public or 2 for Private.")
-    
-    print(f"Privacy: {privacy}")
+    # Privacy menu
+    privacy_menu = {
+        "1": "Public",
+        "2": "Private",
+    }
+    privacy_choice = menu_navigation(privacy_menu, prompt="Choose privacy:")
+    privacy = "public" if privacy_choice == "1" else "private"
+
+    # Display and select playlists
     assign_temporary_ids(playlists)
     display_playlists_table(playlists)
 
-
-    # Select playlists by ID
     while True:
         selected_input = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip()
         try:
-            selected_playlists = [int(x.strip()) for x in selected_input.split(",")]
-            if not selected_playlists:
-                print("No playlists selected. Please enter at least one playlist ID.")
-                continue
-            break
+            selected_ids = [int(x.strip()) for x in selected_input.split(",")]
+            if selected_ids:
+                selected_playlists = [p for p in playlists if p["id"] in selected_ids]
+                break
+            print("No playlists selected. Please enter at least one playlist ID.")
         except ValueError:
             print("Invalid input. Please enter valid numeric playlist IDs.")
 
+    time_ms = None
+    variation_ms = None
 
+    while True:
+        # Main menu
+        main_menu = {
+            "1": "Show selected playlists",
+            "2": "Add playlists to selection",
+            "3": "Remove playlists from selection",
+            "4": "Proceed with current selection",
+            "b": "Back",
+            "c": "Cancel",
+        }
+        main_choice = menu_navigation(main_menu, prompt="Select an option:")
 
-    while True:        
-        main_choice = menu_navigation(
-            ["Show selected playlists", "Add playlists to selection", "Remove playlists from selection", 
-             "Proceed with current selection", "Back", "Cancel"],
-            "Select an option:"
-        )
+        if main_choice == "1":
+            print("\nCurrently selected playlists:")
+            display_selected_playlists([p["id"] for p in selected_playlists], playlists)
 
-        if main_choice == 1:
-            # Show selected playlists
-            print("\nCurrently selected playlists:", selected_playlists)
-
-        elif main_choice == 2:
-            # Add playlists
+        elif main_choice == "2":
             display_playlists_table(playlists)
-            selected_input = input("Enter playlist IDs to add (comma-separated): ").strip()
             try:
-                selected_playlists.extend([int(x.strip()) for x in selected_input.split(",")])
+                new_ids = [int(x.strip()) for x in input("Enter playlist IDs to add (comma-separated): ").strip().split(",")]
+                new_playlists = [p for p in playlists if p["id"] in new_ids and p not in selected_playlists]
+                selected_playlists.extend(new_playlists)
             except ValueError:
                 print("Invalid input. Please enter numeric playlist IDs.")
 
-        elif main_choice == 3:
-            # Remove playlists
+        elif main_choice == "3":
             if selected_playlists:
-                print("Currently selected playlists:", selected_playlists)
-                to_remove = input("Enter playlist IDs to remove (comma-separated): ").strip()
+                assign_temporary_ids(selected_playlists)
+                display_playlists_table(selected_playlists)
                 try:
-                    for playlist_id in map(int, to_remove.split(",")):
-                        if playlist_id in selected_playlists:
-                            selected_playlists.remove(playlist_id)
+                    remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
+                    selected_playlists = [p for p in selected_playlists if p["id"] not in remove_ids]
                 except ValueError:
                     print("Invalid input. Please enter numeric playlist IDs.")
             else:
                 print("No playlists to remove.")
 
-        elif main_choice == 4:
-            # Proceed with current selection
+        elif main_choice == "4":
             while True:
-                proceed_choice = menu_navigation(
-                    ["Shuffle options", "Time options", "Proceed", "Back", "Cancel"],
-                    "Select an option:"
-                )
+                # Submenu for proceeding
+                proceed_menu = {
+                    "1": "Shuffle options",
+                    "2": "Time options",
+                    "3": "Create playlist",
+                    "b": "Back",
+                    "c": "Cancel",
+                }
+                proceed_choice = menu_navigation(proceed_menu, prompt="Select an option:")
 
-                if proceed_choice == 1:
-                    # Shuffle options submenu
-                    shuffle_choice = menu_navigation(
-                        ["Shuffle the order of selected playlists (grouped by playlists)", 
-                         "Shuffle tracks (not grouped)", "No shuffle", "Back"],
-                        "Select an option:"
-                    )
+                if proceed_choice == "1":
+                    shuffle_menu = {
+                        "1": "Shuffle the order of selected playlists",
+                        "2": "Shuffle all tracks",
+                        "3": "No shuffle",
+                    }
+                    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
                     shuffle_option = {
-                        1: "Shuffle playlists",
-                        2: "Shuffle tracks",
-                        3: "No shuffle"
-                    }.get(shuffle_choice, shuffle_option)
+                        "1": "Shuffle playlists",
+                        "2": "Shuffle tracks",
+                        "3": "No shuffle",
+                    }[shuffle_choice]
 
-                elif proceed_choice == 2:
-                    # Time options submenu
-                    time_choice = menu_navigation(
-                        ["Set time for each playlist", "Set total time", 
-                         "Not specified (use full playlists)", "Back"],
-                        "Select an option:" 
-                    )
-                    if time_choice == 1:
-                        # Set time for each playlist
+                elif proceed_choice == "2":
+                    time_menu = {
+                        "1": "Set time for each playlist",
+                        "2": "Set total time",
+                        "3": "Not specified (use full playlists)",
+                    }
+                    time_choice = menu_navigation(time_menu, prompt="Select time option:")
+
+                    if time_choice in ["1", "2"]:
                         time_str = input("Insert a time (hh:mm:ss): ").strip()
                         time_ms = parse_time_input(time_str)
                         if time_ms is None:
                             continue
+
                         variation_str = input("Set the acceptable +- variation in minutes (e.g. 2): ").strip()
                         variation_ms = get_variation_input(variation_str)
                         if variation_ms is None:
                             continue
-                        time_option = f"Each playlist: {time_str} ± {variation_str} minutes"
 
-                    elif time_choice == 2:
-                        # Set total time
-                        time_str = input("Insert a time (hh:mm:ss): ").strip()
-                        time_ms = parse_time_input(time_str)
-                        if time_ms is None:
-                            continue
-                        variation_str = input("Set the acceptable +- variation in minutes (e.g. 2): ").strip()
-                        variation_ms = get_variation_input(variation_str)
-                        if variation_ms is None:
-                            continue
-                        time_option = f"Total time: {time_str} ± {variation_str} minutes"
-
-                    elif time_choice == 3:
+                        time_option = (f"Each playlist: {time_str} ± {variation_str} minutes"
+                                       if time_choice == "1"
+                                       else f"Total time: {time_str} ± {variation_str} minutes")
+                    elif time_choice == "3":
+                        time_ms = None
+                        variation_ms = None
                         time_option = "Not specified"
 
-                elif proceed_choice == 3:
-                    # Confirm playlist creation
-                    print(f"Selected playlists: {selected_playlists}")
+                elif proceed_choice == "3":
+                    print(f"\nPlaylist Configuration:")
+                    print(f"Name: {playlist_name}")
+                    print(f"Privacy: {privacy}")
+                    print(f"Number of source playlists: {len(selected_playlists)}")
                     print(f"Shuffle option: {shuffle_option}")
                     print(f"Time option: {time_option}")
-                    confirm = input("Confirm new playlist? (y/n): ").strip().lower()
-                    if confirm == "y":
-                        # Call playlist creation logic
-                        print("Playlist created with the selected options.")
-                        break
-                    elif confirm == "n":
-                        continue
 
-                elif proceed_choice == 4:
-                    break  # Return to the previous menu
+                    if input("\nCreate playlist? (y/n): ").lower() == "y":
+                        all_selected_songs = []
+                        total_duration = 0
 
-                elif proceed_choice == 5:
-                    return  # Cancel operation
+                        for playlist in selected_playlists:
+                            playlist_songs, duration = get_songs_from_playlist(
+                                playlist["spotify_id"],
+                                time_ms if time_option.startswith("Each") else None,
+                                variation_ms,
+                            )
+                            all_selected_songs.extend(playlist_songs)
+                            total_duration += duration
 
-        elif main_choice == 5:
-            break  # Return to the previous step
+                        if shuffle_option == "Shuffle tracks":
+                            random.shuffle(all_selected_songs)
+                        elif shuffle_option == "Shuffle playlists":
+                            random.shuffle(selected_playlists)
+                            for playlist in selected_playlists:
+                                playlist_songs, _ = get_songs_from_playlist(playlist["spotify_id"])
+                                all_selected_songs.extend(playlist_songs)
 
-        elif main_choice == 6:
-            return  # Exit to the main menu
+                        try:
+                            new_playlist = sp.user_playlist_create(
+                                sp.current_user()["id"],
+                                playlist_name[:40],  # Truncate name if too long
+                                public=(privacy == "public"),
+                            )
+                            track_uris = [song["uri"] for song in all_selected_songs]
+                            for i in range(0, len(track_uris), 100):
+                                sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
+
+                            playlists.append({
+                                "spotify_id": new_playlist["id"],
+                                "user": sp.current_user()["display_name"],
+                                "name": playlist_name[:40],
+                                "duration": format_duration(total_duration),
+                            })
+                            save_playlists_to_file(playlists)
+                            print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
+                            return
+                        except Exception as e:
+                            print(f"Error creating playlist: {e}")
+                            return
+
+                elif proceed_choice in ["b", "c"]:
+                    break
+
+        elif main_choice in ["b", "c"]:
+            return
+
+#    # Clean up temporary IDs
+#    for playlist in playlists + selected_playlists:
+#        if "id" in playlist:
+#            del playlist["id"]

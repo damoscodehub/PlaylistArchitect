@@ -1,10 +1,22 @@
+import logging
+import sys
+from playlistarchitect.utils.logging_utils import setup_logging
 from playlistarchitect.auth.spotify_auth import get_spotify_client, clear_cached_token
-from playlistarchitect.operations.retrieve_playlists_table import get_all_playlists_with_details, save_playlists_to_file, load_playlists_from_file, display_playlists_table
-from playlistarchitect.operations.backup import backup_options, import_playlists
+from playlistarchitect.operations.retrieve_playlists_table import (
+    get_all_playlists_with_details,
+    save_playlists_to_file,
+    load_playlists_from_file,
+    display_playlists_table,
+)
+from playlistarchitect.operations.backup import backup_options
 from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
-from playlistarchitect.utils.helpers import assign_temporary_ids
-import sys
+from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
+from playlistarchitect.utils.constants import CANCEL_OPTION, BACK_OPTION
+
+setup_logging()
+logger = logging.getLogger(__name__)
+
 
 def main():
     sp = get_spotify_client()
@@ -13,49 +25,57 @@ def main():
         print(f"Successfully connected to Spotify as {user['display_name']}")
     except Exception as e:
         print(f"Error: {str(e)}")
+        logger.error(f"Error: {str(e)}")
 
     clear_at_exit = False
     playlists = load_playlists_from_file()
 
     while True:
-        print("\nSelect an option:")
-        print("1. Create a new playlist")
-        print("2. Remove playlists from Your Library")
-        print("3. Show cached playlists")
-        print("4. Refresh playlists data")
-        print("5. Backup options")
-        print("6. Clear Spotify authentication")
-        print("7. Exit")
-        choice = input("Enter your choice: ").strip()
+        # Define the main menu using the constants
+        main_menu = {
+            "1": "Create a new playlist",
+            "2": "Remove playlists from Your Library",
+            "3": "Show cached playlists",
+            "4": "Refresh playlists data",
+            "5": "Backup options",
+            "6": "Clear Spotify authentication",
+            "7": "Exit"
+        }
+
+        choice = menu_navigation(main_menu, prompt="Select an action:")
 
         if choice == "1":
-            create_new_playlist(playlists)  # Call the function to create a new playlist
-            save_playlists_to_file(playlists)  # Update cached playlists data
+            create_new_playlist(playlists)
+            save_playlists_to_file(playlists)
         elif choice == "2":
-            remove_playlists_from_library(sp, playlists)  # Call the function to remove playlists
-            save_playlists_to_file(playlists)  # Update cached playlists data
+            remove_playlists_from_library(sp, playlists)
+            save_playlists_to_file(playlists)
         elif choice == "3":
-            assign_temporary_ids(playlists)  # Assign temporary IDs before displaying
-            display_playlists_table(playlists)  # Call the function to display all playlists
+            assign_temporary_ids(playlists)
+            display_playlists_table(playlists)
             # Remove temporary IDs after display
             for playlist in playlists:
-                if 'id' in playlist:
-                    del playlist['id']
+                if "id" in playlist:
+                    del playlist["id"]
         elif choice == "4":
             playlists = get_all_playlists_with_details()
             save_playlists_to_file(playlists)
             print("Playlists data refreshed.")
         elif choice == "5":
-            backup_options(playlists)  # Call the backup options menu
-            save_playlists_to_file(playlists)  # Update cached playlists data
+            backup_options(playlists)
+            save_playlists_to_file(playlists)
         elif choice == "6":
-            print("\nSelect an option:")
-            print("1. Clear now (it will restart the authentication process immediately)")
-            print("2. Clear at exit (it will run the authentication process next time the app is executed)")
-            sub_choice = input("Enter your choice: ").strip()
+            # Submenu for clearing Spotify authentication
+            auth_menu = {
+                "1": "Clear now (restart authentication immediately)",
+                "2": "Clear at exit (next app start)",
+                BACK_OPTION: "Return to main menu",
+            }
+            sub_choice = menu_navigation(auth_menu, prompt="Select an option:")
+
             if sub_choice == "1":
-                clear_cached_token()  # Clear the cached Spotify authentication token
-                sp = get_spotify_client()  # Re-authenticate with Spotify
+                clear_cached_token()
+                sp = get_spotify_client()
                 try:
                     user = sp.current_user()
                     print(f"Successfully connected to Spotify as {user['display_name']}")
@@ -64,15 +84,14 @@ def main():
             elif sub_choice == "2":
                 clear_at_exit = True
                 print("Spotify authentication will be cleared at exit.")
-            else:
-                print("Invalid option. Please try again.")
+            elif sub_choice == BACK_OPTION:
+                continue
         elif choice == "7":
             if clear_at_exit:
                 clear_cached_token()
             print("Exiting program.")
             break
-        else:
-            print("Invalid option. Please try again.")
+
 
 if __name__ == "__main__":
     try:

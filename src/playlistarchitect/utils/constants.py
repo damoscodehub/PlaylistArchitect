@@ -1,0 +1,3 @@
+CANCEL_OPTION = "Cancel"
+BACK_OPTION = "Back"
+HOME_OPTION = "Home"
