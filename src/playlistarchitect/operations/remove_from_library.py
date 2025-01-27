@@ -1,6 +1,7 @@
 from playlistarchitect.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
-from playlistarchitect.utils.constants import BACK_OPTION, CANCEL_OPTION
+from playlistarchitect.utils.constants import BACK_OPTION
+from playlistarchitect.utils.logging_utils import log_and_print
 
 
 def remove_playlists_from_library(sp, playlists):
@@ -23,7 +24,7 @@ def remove_playlists_from_library(sp, playlists):
                         sp.current_user_unfollow_playlist(playlist["spotify_id"])
                         print(f"Unfollowed playlist: {playlist['name']}")
                     except Exception as e:
-                        print(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
+                        log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
                 playlists.clear()  # Clear all playlists from the cache
                 save_playlists_to_file(playlists)  # Update cached playlists data
                 print("All playlists removed from Your Library.")
@@ -51,7 +52,7 @@ def remove_selected_playlists(sp, playlists):
                         sp.current_user_unfollow_playlist(playlist["spotify_id"])
                         print(f"Unfollowed playlist: {playlist['name']}")
                     except Exception as e:
-                        print(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
+                        log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
                 playlists.clear()
                 save_playlists_to_file(playlists)
                 print("All playlists removed from Your Library.")
@@ -89,7 +90,7 @@ def remove_selected_playlists(sp, playlists):
                             print(f"Unfollowed playlist: {playlist['name']}")
                             playlists.remove(playlist)
                         except Exception as e:
-                            print(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
+                            log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
                     save_playlists_to_file(playlists)
                     print("Selected playlists removed from Your Library.")
                     return

@@ -1,10 +1,4 @@
 from datetime import timedelta
-import logging
-
-# Configure the logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 def parse_time_input(time_str):
     """Converts time in hh:mm:ss format to milliseconds using timedelta."""
@@ -77,26 +71,3 @@ def menu_navigation(options: dict, prompt="Select an option:"):
     )
 
     return choice  # Return the key directly
-
-
-def log_and_print(message: str, level: str="info") -> None:
-    """
-    Logs and prints a message simultaneously.
-    Args:
-        message (str): The message to log and print.
-        level (str): The logging level ("info", "warning", "error", etc.).
-    """
-    # Log the message at the specified level
-    if level == "info":
-        logger.info(message)
-    elif level == "warning":
-        logger.warning(message)
-    elif level == "error":
-        logger.error(message)
-    elif level == "debug":
-        logger.debug(message)
-    else:
-        logger.info(message)  # Default to "info" if level is unrecognized
-
-    # Print the message
-    print(message)

@@ -1,8 +1,8 @@
 import spotipy
+import os
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
-import os
-
+from playlistarchitect.utils.logging_utils import log_and_print
 load_dotenv()
 
 # Create a cache file path
@@ -33,4 +33,4 @@ if __name__ == "__main__":
         user_info = sp.current_user()
         print(f"Successfully connected to Spotify as {user_info['display_name']}")
     except Exception as e:
-        print(f"Error: {str(e)}")
+        log_and_print(f"Error: {str(e)}", level="error")

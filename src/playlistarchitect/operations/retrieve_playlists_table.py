@@ -1,9 +1,11 @@
 import json
 import os
 import sys
+import logging
 from tabulate import tabulate
 from playlistarchitect.auth.spotify_auth import get_spotify_client
-import logging
+from playlistarchitect.utils.logging_utils import log_and_print
+
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -82,14 +84,14 @@ def process_playlists(fetch_details=True):
                 custom_id += 1
 
                 logger.info(
-                    f"Finished processing: ID={playlist_info['id']} | User={playlist_info['user']} "
+                    f"Finished processing(is this?): ID={playlist_info['id']} | User={playlist_info['user']} "
                     f"| Name={playlist_info['name']} | Duration={playlist_info['duration']}"
                 )
 
                 yield playlist_info
 
             except Exception as e:
-                logger.error(f"Error processing playlist {playlist['name'][:40]}: {str(e)}")
+                log_and_print(f"Error processing playlist {playlist['name'][:40]}: {str(e)}", level="error")
 
         if response.get("next") is None:
             break
@@ -106,7 +108,7 @@ def get_all_playlists_with_details(fetch_details=True):
         for playlist in process_playlists(fetch_details=fetch_details):
             playlists.append(playlist)
     except Exception as e:
-        logger.error(f"Error fetching playlists: {str(e)}")
+        log_and_print(f"Error fetching playlists: {str(e)}", level="error")
 
     logger.info(f"Total playlists fetched: {len(playlists)}")
     return playlists
@@ -121,7 +123,7 @@ def save_playlists_to_file(playlists, filename="playlists_data.json"):
         os.replace(temp_filename, filename)  # Atomically replace the old file
         logger.info(f"Playlists saved to {filename}")
     except Exception as e:
-        logger.error(f"Error saving playlists to {filename}: {str(e)}")
+        log_and_print(f"Error saving playlists to {filename}: {str(e)}", level="error")
 
 
 def load_playlists_from_file(filename="playlists_data.json"):
@@ -131,7 +133,7 @@ def load_playlists_from_file(filename="playlists_data.json"):
             with open(filename, "r") as file:
                 return json.load(file)
         except Exception as e:
-            logger.error(f"Error loading playlists from {filename}: {str(e)}")
+            log_and_print(f"Error loading playlists from {filename}: {str(e)}", level="error")
     return []
 
 
@@ -146,7 +148,7 @@ def display_playlists_table(playlists):
             tablefmt="grid",
         ))
     except Exception as e:
-        logger.error(f"Error displaying playlists: {str(e)}")
+        log_and_print(f"Error displaying playlists: {str(e)}", level="error")
 
 
 def display_selected_playlists(selected_ids, all_playlists):
@@ -178,4 +180,4 @@ if __name__ == "__main__":
         print("\nProcess interrupted by user. Exiting...")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        log_and_print(f"Unexpected error: {str(e)}", level="error")
