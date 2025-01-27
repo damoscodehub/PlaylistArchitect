@@ -1,6 +1,6 @@
 import logging
 import sys
-from playlistarchitect.utils.logging_utils import setup_logging, log_and_print
+from playlistarchitect.utils.logging_utils import setup_logging
 from playlistarchitect.auth.spotify_auth import get_spotify_client, clear_cached_token
 from playlistarchitect.operations.retrieve_playlists_table import (
     get_all_playlists_with_details,
@@ -24,7 +24,7 @@ def main():
         user = sp.current_user()
         print(f"Successfully connected to Spotify as {user['display_name']}")
     except Exception as e:
-        log_and_print(f"Error: {str(e)}", level="error")
+        logger.error(f"Error: {str(e)}")
     clear_at_exit = False
     playlists = load_playlists_from_file()
 
@@ -78,7 +78,7 @@ def main():
                     user = sp.current_user()
                     print(f"Successfully connected to Spotify as {user['display_name']}")
                 except Exception as e:
-                    log_and_print(f"Error: {str(e)}", level="error")
+                    logger.error(f"Error: {str(e)}")
             elif sub_choice == "2":
                 clear_at_exit = True
                 print("Spotify authentication will be cleared at exit.")

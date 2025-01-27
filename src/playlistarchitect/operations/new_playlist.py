@@ -1,3 +1,5 @@
+import random
+import logging
 from playlistarchitect.auth.spotify_auth import get_spotify_client
 from playlistarchitect.operations.retrieve_playlists_table import (
     display_playlists_table,
@@ -6,8 +8,8 @@ from playlistarchitect.operations.retrieve_playlists_table import (
     format_duration,
 )
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation, parse_time_input, get_variation_input
-from playlistarchitect.utils.logging_utils import log_and_print
-import random
+
+logger = logging.getLogger(__name__)
 
 sp = get_spotify_client()
 
@@ -36,7 +38,7 @@ def get_songs_from_playlist(playlist_id, total_duration_ms=None, acceptable_devi
                             }
                         )
         except Exception as e:
-            log_and_print(f"Error fetching playlist items: {e}", level="error")
+            logger.error(f"Error fetching playlist items: {e}")
             break
 
         if not tracks_response.get("next"):
@@ -235,7 +237,7 @@ def create_new_playlist(playlists):
                             print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
                             return
                         except Exception as e:
-                            log_and_print(f"Error creating playlist: {e}", level="error")
+                            logger.error(f"Error creating playlist: {e}")
                             return
 
                 elif proceed_choice in ["b", "c"]:

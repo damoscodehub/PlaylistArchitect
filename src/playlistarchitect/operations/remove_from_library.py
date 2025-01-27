@@ -1,8 +1,9 @@
+import logging
 from playlistarchitect.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION
-from playlistarchitect.utils.logging_utils import log_and_print
 
+logger = logging.getLogger(__name__)
 
 def remove_playlists_from_library(sp, playlists):
     """Main menu for removing playlists from the library."""
@@ -24,7 +25,7 @@ def remove_playlists_from_library(sp, playlists):
                         sp.current_user_unfollow_playlist(playlist["spotify_id"])
                         print(f"Unfollowed playlist: {playlist['name']}")
                     except Exception as e:
-                        log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
+                        logger.error(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
                 playlists.clear()  # Clear all playlists from the cache
                 save_playlists_to_file(playlists)  # Update cached playlists data
                 print("All playlists removed from Your Library.")
@@ -52,7 +53,7 @@ def remove_selected_playlists(sp, playlists):
                         sp.current_user_unfollow_playlist(playlist["spotify_id"])
                         print(f"Unfollowed playlist: {playlist['name']}")
                     except Exception as e:
-                        log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
+                        logger.error(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
                 playlists.clear()
                 save_playlists_to_file(playlists)
                 print("All playlists removed from Your Library.")
@@ -90,7 +91,7 @@ def remove_selected_playlists(sp, playlists):
                             print(f"Unfollowed playlist: {playlist['name']}")
                             playlists.remove(playlist)
                         except Exception as e:
-                            log_and_print(f"Error unfollowing playlist {playlist['name']}: {str(e)}", level="error")
+                            logger.error(f"Error unfollowing playlist {playlist['name']}: {str(e)}")
                     save_playlists_to_file(playlists)
                     print("Selected playlists removed from Your Library.")
                     return
