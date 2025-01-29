@@ -6,21 +6,26 @@ from playlistarchitect.utils.logging_utils import setup_logging
 from playlistarchitect.operations.retrieve_playlists_table import (
     display_playlists_table,
     save_playlists_to_file,
-    format_duration,
 )
 from playlistarchitect.auth.spotify_auth import get_spotify_client
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION, CANCEL_OPTION
 from spotipy.exceptions import SpotifyException
+from playlistarchitect.utils.formatting_helpers import format_duration
 
+# Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-sp = get_spotify_client()
-
 
 def export_playlists(playlists, selected_ids=None):
-    """Export selected or all playlists to a file."""
+    """
+    Export selected or all playlists to a file.
+    Args:
+        playlists (list): List of playlists to export.
+        selected_ids (list, optional): List of selected playlist IDs to export.
+    """
+    sp = get_spotify_client()  # Retrieve Spotify client within the function
     assign_temporary_ids(playlists)
 
     if selected_ids:
@@ -77,7 +82,13 @@ def export_playlists(playlists, selected_ids=None):
 
 
 def import_playlists(playlists, option):
-    """Import playlists from a file."""
+    """
+    Import playlists from a file.
+    Args:
+        playlists (list): List of existing playlists.
+        option (str): Import option (e.g., recreate, follow, etc.).
+    """
+    sp = get_spotify_client()  # Retrieve Spotify client within the function
     root = Tk()
     root.withdraw()
     root.attributes("-topmost", True)
@@ -122,7 +133,14 @@ def import_playlists(playlists, option):
 
 
 def recreate_playlist(sp, playlist):
-    """Recreate a playlist in the user's account."""
+    """
+    Recreate a playlist in the user's account.
+    Args:
+        sp: Spotify client instance.
+        playlist (dict): Playlist data to recreate.
+    Returns:
+        bool: True if successful, False otherwise.
+    """
     try:
         new_playlist = sp.user_playlist_create(sp.current_user()["id"], playlist["name"], public=True)
         track_uris = [track["uri"] for track in playlist["tracks"] if "uri" in track]
@@ -139,7 +157,14 @@ def recreate_playlist(sp, playlist):
 
 
 def follow_playlist(sp, playlist):
-    """Attempt to follow a playlist. Return True if successful, False otherwise."""
+    """
+    Attempt to follow a playlist.
+    Args:
+        sp: Spotify client instance.
+        playlist (dict): Playlist data to follow.
+    Returns:
+        bool: True if successful, False otherwise.
+    """
     try:
         sp.current_user_follow_playlist(playlist["spotify_id"])
         print(f"Followed playlist '{playlist['name']}'")
@@ -153,7 +178,11 @@ def follow_playlist(sp, playlist):
 
 
 def backup_options(playlists):
-    """Display backup options menu."""
+    """
+    Display backup options menu.
+    Args:
+        playlists (list): List of playlists to display in the menu.
+    """
     while True:
         # Define the backup menu
         backup_menu = {

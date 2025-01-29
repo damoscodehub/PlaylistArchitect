@@ -2,28 +2,25 @@ import json
 import os
 import sys
 import logging
+import time
+import itertools
+from typing import List, Dict, Generator, Tuple
 from tabulate import tabulate
-from playlistarchitect.auth.spotify_auth import get_spotify_client
+from playlistarchitect.auth.spotify_auth import get_spotify_client, initialize_spotify_client
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from playlistarchitect.utils.playlist_helpers import process_single_playlist
+from playlistarchitect.utils.formatting_helpers import truncate
 
 
 # Setup logging
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
-sp = get_spotify_client()
-
-
-def format_duration(milliseconds):
-    """Convert a duration in milliseconds to the format hh:mm:ss."""
-    seconds = milliseconds // 1000
-    minutes = seconds // 60
-    hours = minutes // 60
-    return f"{hours:02}:{minutes % 60:02}:{seconds % 60:02}"
-
-
-def truncate(text, length):
-    """Truncate text to the specified length, adding '...' if necessary."""
-    return text if len(text) <= length else text[:length - 3] + "..."
+# Generator for spinner animation
+def create_spinner() -> Generator[str, None, None]:
+    """Creates a spinner animation generator."""
+    while True:
+        for char in '|/-\\':
+            yield char
 
 
 def prepare_table_data(playlists, truncate_length=40):
@@ -38,80 +35,95 @@ def prepare_table_data(playlists, truncate_length=40):
         for playlist in playlists
     ]
 
+def process_playlists() -> Generator[Dict, None, None]:
+    """
+    Process user's playlists using multithreading for improved performance.
+    Returns:
+        Tuple[int, int, int]: Total playlists, tracks, and duration in seconds
+    """
+    initialize_spotify_client()
+    sp = get_spotify_client()
 
-def process_playlists(fetch_details=True):
-    """Generator to process user's playlists one by one."""
+    if sp is None:
+        logger.critical("Spotify client is None in process_playlists()! Cannot continue.")
+        raise RuntimeError("Spotify client is not initialized.")
+
     offset = 0
     limit = 50
     custom_id = 1
+    processed_ids = set()
+    total_tracks = 0
+    total_duration = 0
+    total_playlists = 0
+    spinner = create_spinner()
 
     while True:
-        response = sp.current_user_playlists(limit=limit, offset=offset)
-        for playlist in response["items"]:
-            print(f"Processing playlist: {playlist['name'][:40]}...")
+        try:
+            response = sp.current_user_playlists(limit=limit, offset=offset)
+            playlists = response.get("items", [])
+            if not playlists:
+                break
 
-            try:
-                playlist_id = playlist["id"]
-                name = playlist["name"]
-                owner = playlist["owner"]["display_name"]
-
-                total_duration_ms = 0
-                if fetch_details:
-                    track_offset = 0
-                    while True:
-                        tracks_response = sp.playlist_items(
-                            playlist_id,
-                            offset=track_offset,
-                            fields="items.track.duration_ms,next",
-                            additional_types=["track"],
-                        )
-                        for track in tracks_response["items"]:
-                            if track["track"]:
-                                total_duration_ms += track["track"]["duration_ms"]
-
-                        if not tracks_response.get("next"):
-                            break
-                        track_offset += 100
-
-                playlist_info = {
-                    "id": custom_id,
-                    "spotify_id": playlist_id,
-                    "user": truncate(owner, 40),
-                    "name": truncate(name, 40),
-                    "duration": format_duration(total_duration_ms) if fetch_details else "N/A",
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                futures = {
+                    executor.submit(process_single_playlist, playlist): playlist
+                    for playlist in playlists
+                    if playlist["id"] not in processed_ids
                 }
-                custom_id += 1
 
-                logger.info(
-                    f"Finished processing(is this?): ID={playlist_info['id']} | User={playlist_info['user']} "
-                    f"| Name={playlist_info['name']} | Duration={playlist_info['duration']}"
-                )
+                for i, future in enumerate(as_completed(futures), 1):
+                    try:
+                        result = future.result()
+                        if result:
+                            processed_ids.add(result["spotify_id"])
+                            result["id"] = custom_id
+                            custom_id += 1
+                            total_playlists += 1
+                            total_tracks += result.get("track_count", 0)
+                            total_duration += result.get("duration_seconds", 0)
 
-                yield playlist_info
+                            # Update progress with spinner
+                            progress = int((i / len(futures)) * 10)
+                            bar = "#" * progress + "-" * (10 - progress)
+                            sys.stdout.write(f"\r{next(spinner)} Fetching playlists: [{bar}] {i}/{len(futures)}")
+                            sys.stdout.flush()
 
-            except Exception as e:
-                logger.error(f"Error processing playlist {playlist['name'][:40]}: {str(e)}")
+                            yield result
+                    except Exception as e:
+                        failed_playlist = futures[future]
+                        logger.error(f"Error processing playlist {failed_playlist['name']}: {e}")
 
-        if response.get("next") is None:
-            break
+            if response["next"] is None:
+                break
 
-        offset += limit
+            offset += limit
 
+        except Exception as e:
+            logger.error(f"Error fetching playlists: {e}")
+            return total_playlists, total_tracks, total_duration
 
-def get_all_playlists_with_details(fetch_details=True):
-    """Fetch all playlists with detailed information."""
-    playlists = []
-    logger.info("Fetching all playlists...")
+    # Clear the progress line
+    sys.stdout.write("\r" + " " * 50 + "\r")
+    sys.stdout.flush()
+    
+    return total_playlists, total_tracks, total_duration
 
-    try:
-        for playlist in process_playlists(fetch_details=fetch_details):
-            playlists.append(playlist)
-    except Exception as e:
-        logger.error(f"Error fetching playlists: {str(e)}")
-
-    logger.info(f"Total playlists fetched: {len(playlists)}")
+def get_all_playlists_with_details() -> List[Dict]:
+    """
+    Fetch all playlists with detailed information.
+    Returns:
+        list[dict]: A list of all processed playlists.
+    """
+    playlists = list(process_playlists())
+    total_playlists = len(playlists)
+    total_tracks = sum(p.get("track_count", 0) for p in playlists)
+    total_duration = sum(p.get("duration_seconds", 0) for p in playlists)
+    
+    formatted_duration = format_duration(total_duration)
+    print(f"Done! Fetched {total_playlists} playlists, {total_tracks} tracks, "
+          f"and {formatted_duration} playback time.")
+    
     return playlists
-
 
 def save_playlists_to_file(playlists, filename="playlists_data.json"):
     """Save playlists data to a file with a temporary write process."""
@@ -120,10 +132,8 @@ def save_playlists_to_file(playlists, filename="playlists_data.json"):
         with open(temp_filename, "w") as temp_file:
             json.dump(playlists, temp_file)
         os.replace(temp_filename, filename)  # Atomically replace the old file
-        logger.info(f"Playlists saved to {filename}")
     except Exception as e:
         logger.error(f"Error saving playlists to {filename}: {str(e)}")
-
 
 def load_playlists_from_file(filename="playlists_data.json"):
     """Load playlists data from a file."""
@@ -134,7 +144,6 @@ def load_playlists_from_file(filename="playlists_data.json"):
         except Exception as e:
             logger.error(f"Error loading playlists from {filename}: {str(e)}")
     return []
-
 
 def display_playlists_table(playlists):
     """Display playlists in a tabular format."""
@@ -148,7 +157,6 @@ def display_playlists_table(playlists):
         ))
     except Exception as e:
         logger.error(f"Error displaying playlists: {str(e)}")
-
 
 def display_selected_playlists(selected_ids, all_playlists):
     """
@@ -169,14 +177,26 @@ def display_selected_playlists(selected_ids, all_playlists):
         tablefmt="grid",
     ))
 
+def format_duration(seconds):
+    """Format seconds to hh:mm:ss."""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-if __name__ == "__main__":
-    try:
-        playlists = get_all_playlists_with_details()
-        save_playlists_to_file(playlists)
-        display_playlists_table(playlists)
-    except KeyboardInterrupt:
-        print("\nProcess interrupted by user. Exiting...")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+#if __name__ == "__main__":
+#    try:
+#        playlists = get_all_playlists_with_details()
+#        save_playlists_to_file(playlists)
+#        display_playlists_table(playlists)
+#
+#        # Print final message
+#        total_playlists, total_tracks, total_duration = get_all_playlists_with_details()
+#        formatted_duration = format_duration(total_duration)
+#        print(f"\nDone! Fetched {total_playlists} playlists, {total_tracks} tracks, "
+#              f"and {formatted_duration} playback time.", end="")
+#    except KeyboardInterrupt:
+#        print("\nProcess interrupted by user. Exiting...")
+#        sys.exit(0)
+#    except Exception as e:
+#        logger.error(f"Unexpected error: {str(e)}")

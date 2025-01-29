@@ -1,20 +1,22 @@
 import random
 import logging
-from playlistarchitect.auth.spotify_auth import get_spotify_client
+from playlistarchitect.auth.spotify_auth import get_spotify_client, initialize_spotify_client
 from playlistarchitect.operations.retrieve_playlists_table import (
     display_playlists_table,
     save_playlists_to_file,
     display_selected_playlists,
-    format_duration,
 )
 from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation, parse_time_input, get_variation_input
+from playlistarchitect.utils.formatting_helpers import format_duration
+from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-sp = get_spotify_client()
-
-
-def get_songs_from_playlist(playlist_id, total_duration_ms=None, acceptable_deviation_ms=None):
+def get_songs_from_playlist(
+    playlist_id: str, 
+    total_duration_ms: Optional[int] = None, 
+    acceptable_deviation_ms: Optional[int] = None
+) -> Tuple[List[Dict[str, str]], int]:
     """Fetch songs from a playlist, optionally limiting by duration."""
     song_list = []
     track_offset = 0
@@ -62,9 +64,12 @@ def get_songs_from_playlist(playlist_id, total_duration_ms=None, acceptable_devi
 
     return selected_songs, current_duration
 
-
-def create_new_playlist(playlists):
+def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     """Handle the creation of a new playlist with advanced options."""
+    # Ensure Spotify client is initialized before calling the client
+    initialize_spotify_client()
+    sp = get_spotify_client()
+
     all_selected_songs = []
     shuffle_option = "No shuffle"
     time_option = "Not specified"
@@ -245,8 +250,3 @@ def create_new_playlist(playlists):
 
         elif main_choice in ["b", "c"]:
             return
-
-#    # Clean up temporary IDs
-#    for playlist in playlists + selected_playlists:
-#        if "id" in playlist:
-#            del playlist["id"]
