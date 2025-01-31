@@ -24,6 +24,7 @@ def process_single_playlist(playlist):
         owner = playlist["owner"]["display_name"]
 
         total_duration_ms = 0
+        track_count = 0
         track_offset = 0
 
         logger.debug(f"Fetching tracks for playlist: {name} (ID: {playlist_id})")
@@ -32,7 +33,7 @@ def process_single_playlist(playlist):
             tracks_response = sp.playlist_items(
                 playlist_id,
                 offset=track_offset,
-                fields="items.track.duration_ms,next",
+                fields="items.track.duration_ms,next,total",
                 additional_types=["track"]
             )
 
@@ -40,18 +41,21 @@ def process_single_playlist(playlist):
                 for track in tracks_response["items"]:
                     if track.get("track") and track["track"].get("duration_ms"):
                         total_duration_ms += track["track"]["duration_ms"]
+                        track_count += 1
 
             if not tracks_response.get("next"):
                 break
 
             track_offset += 100  # Move to next batch of tracks
 
+        # Keep duration in milliseconds until final formatting
         return {
             "id": None,  # Placeholder, assigned later
             "spotify_id": playlist_id,
             "user": truncate(owner, 40),
             "name": truncate(name, 40),
-            "duration": format_duration(total_duration_ms),
+            "duration_ms": total_duration_ms,  # Store raw milliseconds
+            "track_count": track_count
         }
 
     except Exception as e:

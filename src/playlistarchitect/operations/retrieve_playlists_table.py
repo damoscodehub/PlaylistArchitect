@@ -71,7 +71,7 @@ def process_playlists() -> Generator[Dict, None, None]:
 
     offset, limit, custom_id = 0, 50, 1
     processed_ids = set()
-    total_playlists, total_tracks, total_duration = 0, 0, 0
+    total_playlists, total_tracks, total_duration_ms = 0, 0, 0
     progress_display = ProgressDisplay(total_playlist_count)
     
     try:
@@ -93,7 +93,7 @@ def process_playlists() -> Generator[Dict, None, None]:
                             custom_id += 1
                             total_playlists += 1
                             total_tracks += result.get("track_count", 0)
-                            total_duration += result.get("duration_seconds", 0)
+                            total_duration_ms += result.get("duration_ms", 0)
                             progress_display.increment()
                             yield result
                     except Exception as e:
@@ -106,7 +106,11 @@ def process_playlists() -> Generator[Dict, None, None]:
     finally:
         progress_display.stop()
 
-    yield {"total_playlists": total_playlists, "total_tracks": total_tracks, "total_duration": total_duration}
+    yield {
+        "total_playlists": total_playlists, 
+        "total_tracks": total_tracks, 
+        "total_duration": total_duration_ms // 1000  # Convert to seconds for final summary
+    }
 
 def get_all_playlists_with_details() -> List[Dict]:
     """
@@ -150,16 +154,27 @@ def load_playlists_from_file(filename="playlists_data.json"):
 
 def prepare_table_data(playlists, truncate_length=40):
     """Prepare playlist data for tabulation."""
-    return [[pl["id"], truncate(pl["user"], truncate_length), truncate(pl["name"], truncate_length), pl["duration"]]
-            for pl in playlists]
+    return [[
+        pl["id"], 
+        truncate(pl["user"], truncate_length), 
+        truncate(pl["name"], truncate_length),
+        pl["track_count"],  # Add track count column
+        format_duration(pl["duration_ms"] // 1000)  # Convert ms to seconds here
+    ] for pl in playlists]
+
 
 def display_playlists_table(playlists):
     """Display playlists in a tabular format."""
     try:
         print("\nFetching all playlists...\n")
-        print(tabulate(prepare_table_data(playlists), headers=["ID", "User", "Name", "Duration"], tablefmt="grid"))
+        print(tabulate(
+            prepare_table_data(playlists), 
+            headers=["ID", "User", "Name", "Tracks", "Duration"],  # Updated headers
+            tablefmt="grid"
+        ))
     except Exception as e:
         logger.error(f"Error displaying playlists: {e}")
+        
         
 def display_selected_playlists(selected_ids, all_playlists):
     """
