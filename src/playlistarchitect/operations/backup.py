@@ -8,7 +8,7 @@ from playlistarchitect.operations.retrieve_playlists_table import (
     save_playlists_to_file,
 )
 from playlistarchitect.auth.spotify_auth import get_spotify_client
-from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
+from playlistarchitect.utils.helpers import row_count, menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION, CANCEL_OPTION
 from spotipy.exceptions import SpotifyException
 from playlistarchitect.utils.formatting_helpers import format_duration
@@ -26,7 +26,7 @@ def export_playlists(playlists, selected_ids=None):
         selected_ids (list, optional): List of selected playlist IDs to export.
     """
     sp = get_spotify_client()  # Retrieve Spotify client within the function
-    assign_temporary_ids(playlists)
+    row_count(playlists)
 
     if selected_ids:
         playlists_to_export = [playlist for playlist in playlists if playlist["id"] in selected_ids]
@@ -204,8 +204,8 @@ def backup_options(playlists):
             export_choice = menu_navigation(export_menu, prompt="Select export option:")
 
             if export_choice == "1":
-                assign_temporary_ids(playlists)
-                display_playlists_table(playlists)
+                row_count(playlists)
+                display_playlists_table(playlists, "Fetching saved/created playlists from cache")
                 try:
                     selected_ids = input("Select playlist IDs to export (comma-separated): ").strip()
                     selected_ids = [int(x.strip()) for x in selected_ids.split(",")]

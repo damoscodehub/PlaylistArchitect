@@ -6,13 +6,14 @@ from playlistarchitect.operations.retrieve_playlists_table import (
     save_playlists_to_file,
     display_selected_playlists,
 )
-from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation, parse_time_input, get_variation_input
+from playlistarchitect.utils.helpers import row_count, menu_navigation, parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
 from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 def get_songs_from_playlist(
+    sp,  # Add sp as an argument
     playlist_id: str, 
     total_duration_ms: Optional[int] = None, 
     acceptable_deviation_ms: Optional[int] = None
@@ -87,8 +88,8 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     privacy = "public" if privacy_choice == "1" else "private"
 
     # Display and select playlists
-    assign_temporary_ids(playlists)
-    display_playlists_table(playlists)
+    row_count(playlists)
+    display_playlists_table(playlists, "Showing saved/created playlists from cache")
 
     while True:
         selected_input = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip()
@@ -121,18 +122,37 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
             display_selected_playlists([p["id"] for p in selected_playlists], playlists)
 
         elif main_choice == "2":
-            display_playlists_table(playlists)
+            display_playlists_table(playlists, "Showing saved/created playlists from cache")
             try:
                 new_ids = [int(x.strip()) for x in input("Enter playlist IDs to add (comma-separated): ").strip().split(",")]
-                new_playlists = [p for p in playlists if p["id"] in new_ids and p not in selected_playlists]
-                selected_playlists.extend(new_playlists)
+
+                # Get sets of existing and already selected playlist IDs
+                existing_ids = {p["id"] for p in playlists}
+                already_selected = {p["id"] for p in selected_playlists}
+
+                # Identify invalid and duplicate IDs
+                invalid_ids = [id_ for id_ in new_ids if id_ not in existing_ids]
+                duplicate_ids = [id_ for id_ in new_ids if id_ in already_selected]
+
+                # Display messages for issues
+                if invalid_ids:
+                    print(f"⚠️ Invalid ID(s): {', '.join(map(str, invalid_ids))} (These do not exist).")
+
+                if duplicate_ids:
+                    print(f"🔄 Already selected ID(s): {', '.join(map(str, duplicate_ids))} (These are already in your selection).")
+
+                # Add only valid and non-duplicate playlists
+                valid_new_playlists = [p for p in playlists if p["id"] in new_ids and p["id"] not in already_selected]
+                selected_playlists.extend(valid_new_playlists)
+
             except ValueError:
-                print("Invalid input. Please enter numeric playlist IDs.")
+                print("❌ Invalid input. Please enter numeric playlist IDs.")
+
 
         elif main_choice == "3":
             if selected_playlists:
-                assign_temporary_ids(selected_playlists)
-                display_playlists_table(selected_playlists)
+                row_count(selected_playlists)
+                display_playlists_table(selected_playlists, "Showing selected playlists")
                 try:
                     remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
                     selected_playlists = [p for p in selected_playlists if p["id"] not in remove_ids]
@@ -207,6 +227,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
 
                         for playlist in selected_playlists:
                             playlist_songs, duration = get_songs_from_playlist(
+                                sp,  # Pass sp as the first argument
                                 playlist["spotify_id"],
                                 time_ms if time_option.startswith("Each") else None,
                                 variation_ms,

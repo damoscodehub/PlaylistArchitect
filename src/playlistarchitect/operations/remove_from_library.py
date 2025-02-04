@@ -1,6 +1,6 @@
 import logging
 from playlistarchitect.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file
-from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
+from playlistarchitect.utils.helpers import row_count, menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,8 @@ def remove_selected_playlists(sp, playlists):
     selected_playlists = []
 
     while True:
-        assign_temporary_ids(playlists)
-        display_playlists_table(playlists)
+        row_count(playlists)
+        display_playlists_table(playlists, "Showing cached playlists")
 
         selected_input = input("Select the IDs of the playlists to remove (comma-separated): ").strip()
 
@@ -63,7 +63,7 @@ def remove_selected_playlists(sp, playlists):
 
         try:
             selected_ids = [int(x.strip()) for x in selected_input.split(",")]
-            selected_playlists = [playlists[idx - 1] for idx in selected_ids]
+            selected_playlists = [p for p in playlists if p["id"] in selected_ids]  # Correctly filter by ID
         except ValueError:
             print("Invalid input. Please enter numeric playlist IDs.")
             continue
@@ -78,8 +78,8 @@ def remove_selected_playlists(sp, playlists):
             sub_choice = menu_navigation(selection_menu, prompt="What do you want to do with this selection?")
 
             if sub_choice == "1":
-                assign_temporary_ids(selected_playlists)
-                display_playlists_table(selected_playlists)
+                row_count(selected_playlists)
+                display_playlists_table(selected_playlists, "Showing selected playlists")
             elif sub_choice == "2":
                 edit_selection(selected_playlists, playlists)
             elif sub_choice == "3":
@@ -115,8 +115,8 @@ def edit_selection(selected_playlists, playlists):
         choice = menu_navigation(edit_menu, prompt="Edit selection:")
 
         if choice == "1":
-            assign_temporary_ids(playlists)
-            display_playlists_table(playlists)
+            row_count(playlists)
+            display_playlists_table(playlists, "Showing cached playlists")
             try:
                 selected_ids = input("Enter playlist IDs to add (comma-separated): ").strip()
                 selected_ids = [int(x.strip()) for x in selected_ids.split(",")]
@@ -127,13 +127,14 @@ def edit_selection(selected_playlists, playlists):
             except ValueError:
                 print("Invalid input. Please enter numeric playlist IDs.")
         elif choice == "2":
-            assign_temporary_ids(selected_playlists)
-            display_playlists_table(selected_playlists)
-            try:
+            row_count(selected_playlists)
+            display_playlists_table(selected_playlists, "Showing selected playlists")
+            try: 
                 selected_ids = input("Enter playlist IDs to remove from the selection (comma-separated): ").strip()
                 selected_ids = [int(x.strip()) for x in selected_ids.split(",")]
-                selected_playlists[:] = [p for p in selected_playlists if playlists.index(p) + 1 not in selected_ids]
+                selected_playlists[:] = [p for p in selected_playlists if p["id"] not in selected_ids]  # ✅ Use selected_ids instead of remove_ids
             except ValueError:
                 print("Invalid input. Please enter numeric playlist IDs.")
+
         elif choice == "b":
             return

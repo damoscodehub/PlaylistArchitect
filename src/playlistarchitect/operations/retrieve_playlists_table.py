@@ -153,20 +153,21 @@ def load_playlists_from_file(filename="playlists_data.json"):
     return []
 
 def prepare_table_data(playlists, truncate_length=40):
-    """Prepare playlist data for tabulation."""
-    return [[
-        pl["id"], 
-        truncate(pl["user"], truncate_length), 
-        truncate(pl["name"], truncate_length),
-        pl["track_count"],  # Add track count column
-        format_duration(pl["duration_ms"] // 1000)  # Convert ms to seconds here
-    ] for pl in playlists]
+    return [
+        [playlist.get("count", index + 1),  # Ensure Count exists
+         playlist["id"],  
+         truncate(playlist["user"], truncate_length), 
+         truncate(playlist["name"], truncate_length),
+         playlist["track_count"], 
+         format_duration(playlist["duration_ms"] // 1000)]
+        for index, playlist in enumerate(playlists)
+    ]
 
 
-def display_playlists_table(playlists):
+def display_playlists_table(playlists, msg=""):
     """Display playlists in a tabular format."""
     try:
-        print("\nFetching all playlists...\n")
+        print(f"\n{msg}\n")
         print(tabulate(
             prepare_table_data(playlists), 
             headers=["ID", "User", "Name", "Tracks", "Duration"],  # Updated headers
@@ -179,19 +180,26 @@ def display_playlists_table(playlists):
 def display_selected_playlists(selected_ids, all_playlists):
     """
     Display the selected playlists with their original IDs using tabulate.
-    :param selected_ids: List of selected playlist IDs
-    :param all_playlists: List of all playlists (general table)
+    The first column is "Count" (incremental index), followed by "ID".
     """
     selected_playlists = [
         playlist for playlist in all_playlists if playlist["id"] in selected_ids
     ]
 
-    table_data = prepare_table_data(selected_playlists)
+    table_data = [
+        [index + 1,  # Count (incremental)
+         playlist["id"], 
+         playlist["user"], 
+         playlist["name"], 
+         playlist["track_count"], 
+         format_duration(playlist["duration_ms"] // 1000)]  # Convert ms to seconds
+        for index, playlist in enumerate(selected_playlists)
+    ]
 
     print("\nSelected Playlist Data:")
     print(tabulate(
         table_data,
-        headers=["ID", "User", "Name", "Duration"],
+        headers=["Count", "ID", "User", "Name", "Tracks", "Duration"],  # Fixed headers
         tablefmt="grid",
     ))
 

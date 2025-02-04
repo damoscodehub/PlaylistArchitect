@@ -13,7 +13,7 @@ from playlistarchitect.operations.retrieve_playlists_table import (
 from playlistarchitect.operations.backup import backup_options
 from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
-from playlistarchitect.utils.helpers import assign_temporary_ids, menu_navigation
+from playlistarchitect.utils.helpers import row_count, menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION
 
 # Set up logging
@@ -58,8 +58,8 @@ def main() -> None:
             remove_playlists_from_library(playlists)
             save_playlists_to_file(playlists)
         elif choice == "3":
-            assign_temporary_ids(playlists)
-            display_playlists_table(playlists)
+            row_count(playlists)
+            display_playlists_table(playlists, "Showing cached playlists")
             # Remove temporary IDs after display
             for playlist in playlists:
                 playlist.pop("id", None)
