@@ -54,9 +54,7 @@ class ProgressDisplay:
 
 def process_playlists() -> Generator[Dict, None, None]:
     """
-    Process user's playlists using multithreading for improved performance.
-    Returns:
-        Generator[Dict, None, None]: Yields processed playlists
+    Process user's playlists using multithreading while preserving IDs.
     """
     initialize_spotify_client()
     sp = get_spotify_client()
@@ -65,15 +63,19 @@ def process_playlists() -> Generator[Dict, None, None]:
         logger.critical("Spotify client is None! Cannot continue.")
         raise RuntimeError("Spotify client is not initialized.")
 
+    # Load cached playlists
+    cached_playlists = load_playlists_from_file()
+    cached_playlist_map = {p["spotify_id"]: p for p in cached_playlists}
+
     # First, get total number of playlists
     initial_response = sp.current_user_playlists(limit=1)
     total_playlist_count = initial_response['total']
 
-    offset, limit, custom_id = 0, 50, 1
+    offset, limit = 0, 50
     processed_ids = set()
     total_playlists, total_tracks, total_duration_ms = 0, 0, 0
     progress_display = ProgressDisplay(total_playlist_count)
-    
+
     try:
         progress_display.start()
         while True:
@@ -83,14 +85,23 @@ def process_playlists() -> Generator[Dict, None, None]:
                 break
 
             with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = {executor.submit(process_single_playlist, pl): pl for pl in playlists if pl["id"] not in processed_ids}
+                futures = {executor.submit(process_single_playlist, pl): pl for pl in playlists}
                 for future in as_completed(futures):
                     try:
                         result = future.result()
                         if result:
-                            processed_ids.add(result["spotify_id"])
-                            result["id"] = custom_id
-                            custom_id += 1
+                            spotify_id = result["spotify_id"]
+
+                            # Preserve ID if the playlist exists in cache
+                            if spotify_id in cached_playlist_map:
+                                result["id"] = cached_playlist_map[spotify_id]["id"]
+                            else:
+                                # Assign new ID only to new playlists
+                                new_id = max([p["id"] for p in cached_playlists], default=0) + 1
+                                result["id"] = new_id
+                                cached_playlist_map[spotify_id] = result  # Store in cache
+
+                            processed_ids.add(spotify_id)
                             total_playlists += 1
                             total_tracks += result.get("track_count", 0)
                             total_duration_ms += result.get("duration_ms", 0)
@@ -102,14 +113,14 @@ def process_playlists() -> Generator[Dict, None, None]:
             if response["next"] is None:
                 break
             offset += limit
-    
+
     finally:
         progress_display.stop()
 
     yield {
-        "total_playlists": total_playlists, 
-        "total_tracks": total_tracks, 
-        "total_duration": total_duration_ms // 1000  # Convert to seconds for final summary
+        "total_playlists": total_playlists,
+        "total_tracks": total_tracks,
+        "total_duration": total_duration_ms // 1000  # Convert to seconds
     }
 
 def get_all_playlists_with_details() -> List[Dict]:
@@ -133,36 +144,43 @@ def get_all_playlists_with_details() -> List[Dict]:
     return playlists
 
 def save_playlists_to_file(playlists, filename="playlists_data.json"):
-    """Save playlists data to a file safely."""
+    """Save playlists data, ensuring IDs are preserved."""
+    for i, playlist in enumerate(playlists, start=1):
+        if "id" not in playlist:  # Only assign ID if missing
+            playlist["id"] = i
     temp_filename = f"{filename}.tmp"
     try:
         with open(temp_filename, "w") as temp_file:
-            json.dump(playlists, temp_file)
+            json.dump(playlists, temp_file, indent=4)
         os.replace(temp_filename, filename)
     except Exception as e:
         logger.error(f"Error saving playlists to {filename}: {e}")
 
 def load_playlists_from_file(filename="playlists_data.json"):
-    """Load playlists data from a file."""
+    """Load playlists from file and ensure IDs remain consistent."""
     if os.path.exists(filename):
         try:
             with open(filename, "r") as file:
-                return json.load(file)
+                playlists = json.load(file)
+                return playlists
         except Exception as e:
             logger.error(f"Error loading playlists from {filename}: {e}")
     return []
 
 def prepare_table_data(playlists, truncate_length=40):
+    # Sort playlists by ID in ascending order
+    sorted_playlists = sorted(playlists, key=lambda p: p.get("id", float("inf")))
+    
     return [
-        [playlist.get("count", index + 1),  # Ensure Count exists
-         playlist["id"],  
+        [index + 1,  # Generate Count dynamically
+         playlist.get("id", "N/A"),  
          truncate(playlist["user"], truncate_length), 
          truncate(playlist["name"], truncate_length),
          playlist["track_count"], 
          format_duration(playlist["duration_ms"] // 1000)]
-        for index, playlist in enumerate(playlists)
+        for index, playlist in enumerate(sorted_playlists)
     ]
-
+    
 
 def display_playlists_table(playlists, msg=""):
     """Display playlists in a tabular format."""
@@ -170,11 +188,11 @@ def display_playlists_table(playlists, msg=""):
         print(f"\n{msg}\n")
         print(tabulate(
             prepare_table_data(playlists), 
-            headers=["ID", "User", "Name", "Tracks", "Duration"],  # Updated headers
+            headers=["Count", "ID", "User", "Name", "Tracks", "Duration"],
             tablefmt="grid"
         ))
     except Exception as e:
-        logger.error(f"Error displaying playlists: {e}")
+        logger.error(f"Error displaying playlists: {e}")        
         
         
 def display_selected_playlists(selected_ids, all_playlists):

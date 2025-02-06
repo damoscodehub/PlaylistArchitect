@@ -20,13 +20,13 @@ def get_variation_input(variation_str):
         return None
 
 
-def row_count(playlists):
-    """
-    Assigns a temporary 'count' field to each playlist for display purposes,
-    while keeping the original 'id' intact.
-    """
-    for index, playlist in enumerate(playlists, start=1):
-        playlist['count'] = index  # Add a separate count field instead of modifying 'id'
+# def row_count(playlists):
+#     """
+#     Assigns a temporary 'count' field to each playlist for display purposes,
+#     while keeping the original 'id' intact.
+#     """
+#     for index, playlist in enumerate(playlists, start=1):
+#         playlist['count'] = index  # Add a separate count field instead of modifying 'id'
 
         
             

@@ -6,7 +6,7 @@ from playlistarchitect.operations.retrieve_playlists_table import (
     save_playlists_to_file,
     display_selected_playlists,
 )
-from playlistarchitect.utils.helpers import row_count, menu_navigation, parse_time_input, get_variation_input
+from playlistarchitect.utils.helpers import menu_navigation, parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
 from typing import List, Dict, Optional, Tuple
 
@@ -88,7 +88,6 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     privacy = "public" if privacy_choice == "1" else "private"
 
     # Display and select playlists
-    row_count(playlists)
     display_playlists_table(playlists, "Showing saved/created playlists from cache")
 
     while True:
@@ -151,7 +150,6 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
 
         elif main_choice == "3":
             if selected_playlists:
-                row_count(selected_playlists)
                 display_playlists_table(selected_playlists, "Showing selected playlists")
                 try:
                     remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
@@ -224,7 +222,9 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                     if input("\nCreate playlist? (y/n): ").lower() == "y":
                         all_selected_songs = []
                         total_duration = 0
-
+                        
+                        logger.debug(f"Playlists before creation: {playlists}")
+                        
                         for playlist in selected_playlists:
                             playlist_songs, duration = get_songs_from_playlist(
                                 sp,  # Pass sp as the first argument
@@ -242,7 +242,6 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                             for playlist in selected_playlists:
                                 playlist_songs, _ = get_songs_from_playlist(playlist["spotify_id"])
                                 all_selected_songs.extend(playlist_songs)
-
                         try:
                             new_playlist = sp.user_playlist_create(
                                 sp.current_user()["id"],
@@ -253,13 +252,21 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                             for i in range(0, len(track_uris), 100):
                                 sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
 
+                            # Assign a new ID to the playlist
+                            new_id = max([p.get("id", 0) for p in playlists], default=0) + 1  # Get the next available ID
                             playlists.append({
+                                "id": new_id,
                                 "spotify_id": new_playlist["id"],
                                 "user": sp.current_user()["display_name"],
                                 "name": playlist_name[:40],
+                                "track_count": len(all_selected_songs),
+                                "duration_ms": total_duration,
                                 "duration": format_duration(total_duration),
                             })
                             save_playlists_to_file(playlists)
+                            
+                            logger.debug(f"Playlists after creation: {playlists}")
+                            
                             print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
                             return
                         except Exception as e:

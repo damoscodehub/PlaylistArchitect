@@ -1,6 +1,6 @@
 import logging
 from playlistarchitect.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file
-from playlistarchitect.utils.helpers import row_count, menu_navigation
+from playlistarchitect.utils.helpers import menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,6 @@ def remove_selected_playlists(sp, playlists):
     selected_playlists = []
 
     while True:
-        row_count(playlists)
         display_playlists_table(playlists, "Showing cached playlists")
 
         selected_input = input("Select the IDs of the playlists to remove (comma-separated): ").strip()
@@ -78,7 +77,6 @@ def remove_selected_playlists(sp, playlists):
             sub_choice = menu_navigation(selection_menu, prompt="What do you want to do with this selection?")
 
             if sub_choice == "1":
-                row_count(selected_playlists)
                 display_playlists_table(selected_playlists, "Showing selected playlists")
             elif sub_choice == "2":
                 edit_selection(selected_playlists, playlists)
@@ -115,7 +113,6 @@ def edit_selection(selected_playlists, playlists):
         choice = menu_navigation(edit_menu, prompt="Edit selection:")
 
         if choice == "1":
-            row_count(playlists)
             display_playlists_table(playlists, "Showing cached playlists")
             try:
                 selected_ids = input("Enter playlist IDs to add (comma-separated): ").strip()
@@ -127,7 +124,6 @@ def edit_selection(selected_playlists, playlists):
             except ValueError:
                 print("Invalid input. Please enter numeric playlist IDs.")
         elif choice == "2":
-            row_count(selected_playlists)
             display_playlists_table(selected_playlists, "Showing selected playlists")
             try: 
                 selected_ids = input("Enter playlist IDs to remove from the selection (comma-separated): ").strip()
