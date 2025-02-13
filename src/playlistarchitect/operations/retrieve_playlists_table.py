@@ -1,3 +1,4 @@
+# retrieve_playlists_table.py
 import json
 import os
 import sys
@@ -66,13 +67,17 @@ def process_playlists() -> Generator[Dict, None, None]:
     # Load cached playlists
     cached_playlists = load_playlists_from_file()
     cached_playlist_map = {p["spotify_id"]: p for p in cached_playlists}
+    
+    # Track all assigned IDs to prevent duplicates
+    assigned_ids = {p["id"] for p in cached_playlists if "id" in p}
+    next_available_id = max(assigned_ids, default=0) + 1
 
     # First, get total number of playlists
     initial_response = sp.current_user_playlists(limit=1)
     total_playlist_count = initial_response['total']
 
     offset, limit = 0, 50
-    processed_ids = set()
+    processed_spotify_ids = set()
     total_playlists, total_tracks, total_duration_ms = 0, 0, 0
     progress_display = ProgressDisplay(total_playlist_count)
 
@@ -92,21 +97,26 @@ def process_playlists() -> Generator[Dict, None, None]:
                         if result:
                             spotify_id = result["spotify_id"]
 
+                            # Skip if we've already processed this Spotify ID
+                            if spotify_id in processed_spotify_ids:
+                                continue
+
                             # Preserve ID if the playlist exists in cache
                             if spotify_id in cached_playlist_map:
                                 result["id"] = cached_playlist_map[spotify_id]["id"]
                             else:
-                                # Assign new ID only to new playlists
-                                new_id = max([p["id"] for p in cached_playlists], default=0) + 1
-                                result["id"] = new_id
-                                cached_playlist_map[spotify_id] = result  # Store in cache
+                                # Assign next available ID
+                                result["id"] = next_available_id
+                                next_available_id += 1
+                                cached_playlist_map[spotify_id] = result
 
-                            processed_ids.add(spotify_id)
+                            processed_spotify_ids.add(spotify_id)
                             total_playlists += 1
                             total_tracks += result.get("track_count", 0)
                             total_duration_ms += result.get("duration_ms", 0)
                             progress_display.increment()
                             yield result
+
                     except Exception as e:
                         logger.error(f"Error processing playlist: {e}")
 
@@ -141,13 +151,22 @@ def get_all_playlists_with_details() -> List[Dict]:
           f"{summary.get('total_tracks', 0)} tracks, "
           f"and {format_duration(summary.get('total_duration', 0))} playback time.")
 
+    # Save the playlists with unique IDs
+    save_playlists_to_file(playlists)
     return playlists
 
 def save_playlists_to_file(playlists, filename="playlists_data.json"):
     """Save playlists data, ensuring IDs are preserved."""
-    for i, playlist in enumerate(playlists, start=1):
-        if "id" not in playlist:  # Only assign ID if missing
-            playlist["id"] = i
+    # Find the maximum existing ID in the playlists
+    max_id = max([p.get("id", 0) for p in playlists], default=0)
+
+    # Assign new IDs to playlists that don't have one
+    for playlist in playlists:
+        if "id" not in playlist:
+            max_id += 1
+            playlist["id"] = max_id
+
+    # Save the playlists to a temporary file
     temp_filename = f"{filename}.tmp"
     try:
         with open(temp_filename, "w") as temp_file:

@@ -1,3 +1,4 @@
+# new_playlist.py
 import random
 import logging
 from playlistarchitect.auth.spotify_auth import get_spotify_client, initialize_spotify_client
@@ -248,12 +249,21 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                                 playlist_name[:40],  # Truncate name if too long
                                 public=(privacy == "public"),
                             )
+                            
+                            logger.debug(f"New Playlist Created from API: {new_playlist}")  # ✅ Log the response
+
+                            if "id" not in new_playlist:
+                                raise ValueError("Spotify API response missing 'id' field")                            
+                        
                             track_uris = [song["uri"] for song in all_selected_songs]
                             for i in range(0, len(track_uris), 100):
                                 sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
 
                             # Assign a new ID to the playlist
                             new_id = max([p.get("id", 0) for p in playlists], default=0) + 1  # Get the next available ID
+                            
+                            logger.debug(f"New Playlist Created: {new_playlist}")
+                            
                             playlists.append({
                                 "id": new_id,
                                 "spotify_id": new_playlist["id"],
