@@ -5,6 +5,7 @@ Backups/
 Code_83cJyasG0Y.png
 ignore/
 logs/
+tests/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
