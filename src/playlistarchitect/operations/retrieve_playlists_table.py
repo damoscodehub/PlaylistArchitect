@@ -64,13 +64,18 @@ def process_playlists() -> Generator[Dict, None, None]:
         logger.critical("Spotify client is None! Cannot continue.")
         raise RuntimeError("Spotify client is not initialized.")
 
-    # Load cached playlists
+    # Load cached playlists and build a proper lookup map
     cached_playlists = load_playlists_from_file()
-    cached_playlist_map = {p["spotify_id"]: p for p in cached_playlists}
-    
-    # Track all assigned IDs to prevent duplicates
-    assigned_ids = {p["id"] for p in cached_playlists if "id" in p}
+    cached_playlist_map = {p["spotify_id"]: p for p in cached_playlists if "spotify_id" in p}
+
+    # Ensure assigned_ids is initialized BEFORE logging
+    assigned_ids = set(p["id"] for p in cached_playlists if "id" in p)
+
+    logger.debug(f"Assigned IDs found: {assigned_ids}")
+
+    # Initialize next_available_id AFTER assigned_ids exist
     next_available_id = max(assigned_ids, default=0) + 1
+    logger.debug(f"Starting next_available_id at: {next_available_id}")
 
     # First, get total number of playlists
     initial_response = sp.current_user_playlists(limit=1)
@@ -97,18 +102,25 @@ def process_playlists() -> Generator[Dict, None, None]:
                         if result:
                             spotify_id = result["spotify_id"]
 
-                            # Skip if we've already processed this Spotify ID
+                            # Skip if already processed
                             if spotify_id in processed_spotify_ids:
                                 continue
 
-                            # Preserve ID if the playlist exists in cache
-                            if spotify_id in cached_playlist_map:
+                            logger.debug(f"Processing playlist {result['name']} with Spotify ID {spotify_id}")
+                            
+                            # ✅ Fix: Properly check if a playlist ID already exists
+                            if spotify_id in cached_playlist_map and "id" in cached_playlist_map[spotify_id]:
                                 result["id"] = cached_playlist_map[spotify_id]["id"]
+                                logger.debug(f"Reusing cached ID {result['id']} for playlist {result['name']}")
                             else:
-                                # Assign next available ID
+                                # ✅ Assign a unique new ID
                                 result["id"] = next_available_id
+                                logger.debug(f"Assigning new ID {next_available_id} to playlist {result['name']}")
+                                assigned_ids.add(next_available_id)  # Track the ID
                                 next_available_id += 1
-                                cached_playlist_map[spotify_id] = result
+                                
+                            # ✅ Update the cache properly
+                            cached_playlist_map[spotify_id] = result
 
                             processed_spotify_ids.add(spotify_id)
                             total_playlists += 1
@@ -157,6 +169,10 @@ def get_all_playlists_with_details() -> List[Dict]:
 
 def save_playlists_to_file(playlists, filename="playlists_data.json"):
     """Save playlists data, ensuring IDs are preserved."""
+
+    # Debugging: Check what IDs exist before saving
+    logger.debug(f"Saving playlists with assigned IDs: {[p.get('id', 'N/A') for p in playlists]}")
+
     # Find the maximum existing ID in the playlists
     max_id = max([p.get("id", 0) for p in playlists], default=0)
 
@@ -174,6 +190,7 @@ def save_playlists_to_file(playlists, filename="playlists_data.json"):
         os.replace(temp_filename, filename)
     except Exception as e:
         logger.error(f"Error saving playlists to {filename}: {e}")
+
 
 def load_playlists_from_file(filename="playlists_data.json"):
     """Load playlists from file and ensure IDs remain consistent."""
