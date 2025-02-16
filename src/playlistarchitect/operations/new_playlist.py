@@ -75,6 +75,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     shuffle_option = "No shuffle"
     time_option = "Not specified"
     selected_playlists = []
+    selected_ids = set()
 
     # Get playlist details
     playlist_name = input("Enter a name for the new playlist: ").strip()
@@ -88,7 +89,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     privacy = "public" if privacy_choice == "1" else "private"
 
     # Display and select playlists
-    display_playlists_table(playlists, "Showing saved/created playlists from cache")
+    display_playlists_table(playlists, "Showing saved/created playlists from cache", selected_ids=selected_ids)
 
     while True:
         selected_input = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip()
@@ -121,7 +122,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
             display_selected_playlists([p["id"] for p in selected_playlists], playlists)
 
         elif main_choice == "2":
-            display_playlists_table(playlists, "Showing saved/created playlists from cache")
+            display_playlists_table(playlists, "Showing saved/created playlists from cache", selected_ids={p["id"] for p in selected_playlists})
             try:
                 new_ids = [int(x.strip()) for x in input("Enter playlist IDs to add (comma-separated): ").strip().split(",")]
 
@@ -150,7 +151,8 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
 
         elif main_choice == "3":
             if selected_playlists:
-                display_playlists_table(selected_playlists, "Showing selected playlists")
+                print("\nCurrently selected playlists:")
+                display_selected_playlists([p["id"] for p in selected_playlists], playlists)
                 try:
                     remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
                     selected_playlists = [p for p in selected_playlists if p["id"] not in remove_ids]

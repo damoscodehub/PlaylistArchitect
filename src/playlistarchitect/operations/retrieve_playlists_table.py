@@ -167,12 +167,25 @@ def load_playlists_from_file(filename="playlists_data.json"):
             logger.error(f"Error loading playlists from {filename}: {e}")
     return []
 
-def prepare_table_data(playlists, truncate_length=40):
+def prepare_table_data(playlists, truncate_length=40, selected_ids=None):
+    """
+    Prepare data for table display.
+    Args:
+        playlists (list): The list of playlists.
+        truncate_length (int): Maximum text length for truncation.
+        selected_ids (set): The set of selected playlist IDs.
+    Returns:
+        list: A formatted list ready for tabulate.
+    """
+    if selected_ids is None:
+        selected_ids = set()
+
     # Sort playlists by ID in ascending order
     sorted_playlists = sorted(playlists, key=lambda p: p.get("id", float("inf")))
-    
+
     return [
-        [index + 1,  # Generate Count dynamically
+        ["███" if playlist.get("id") in selected_ids else "-",  # Selection indicator
+         index + 1,  # Generate Count dynamically
          playlist.get("id", "N/A"),  
          truncate(playlist["user"], truncate_length), 
          truncate(playlist["name"], truncate_length),
@@ -182,17 +195,24 @@ def prepare_table_data(playlists, truncate_length=40):
     ]
     
 
-def display_playlists_table(playlists, msg=""):
-    """Display playlists in a tabular format."""
+def display_playlists_table(playlists, msg="", selected_ids=None):
+    """
+    Display playlists in a tabular format.
+    Args:
+        playlists (list): List of playlists.
+        msg (str): Message to display before the table.
+        selected_ids (set): Set of selected playlist IDs.
+    """
     try:
         print(f"\n{msg}\n")
         print(tabulate(
-            prepare_table_data(playlists), 
-            headers=["Count", "ID", "User", "Name", "Tracks", "Duration"],
-            tablefmt="grid"
+            prepare_table_data(playlists, selected_ids=selected_ids), 
+            headers=["Sel.", "#", "ID", "User", "Name", "Tracks", "Duration"],
+            tablefmt="grid",
+            colalign=("center", "right", "right", "left", "left", "right", "center")
         ))
     except Exception as e:
-        logger.error(f"Error displaying playlists: {e}")        
+        logger.error(f"Error displaying playlists: {e}")       
         
         
 def display_selected_playlists(selected_ids, all_playlists):
@@ -217,7 +237,7 @@ def display_selected_playlists(selected_ids, all_playlists):
     print("\nSelected Playlist Data:")
     print(tabulate(
         table_data,
-        headers=["Count", "ID", "User", "Name", "Tracks", "Duration"],  # Fixed headers
+        headers=["#", "ID", "User", "Name", "Tracks", "Duration"],  # Fixed headers
         tablefmt="grid",
     ))
 
