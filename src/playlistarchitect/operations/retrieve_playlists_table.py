@@ -167,54 +167,104 @@ def load_playlists_from_file(filename="playlists_data.json"):
             logger.error(f"Error loading playlists from {filename}: {e}")
     return []
 
-def prepare_table_data(playlists, truncate_length=40, selected_ids=None):
+def prepare_table_data(playlists, truncate_length=40, selected_ids=None, show_selection_column=True):
     """
     Prepare data for table display.
+    
     Args:
-        playlists (list): The list of playlists.
-        truncate_length (int): Maximum text length for truncation.
-        selected_ids (set): The set of selected playlist IDs.
+        playlists (list): List of playlists.
+        truncate_length (int): Max text length for truncation.
+        selected_ids (set or None): Set of selected playlist IDs.
+        show_selection_column (bool): Whether to include the "Sel." column.
+
     Returns:
-        list: A formatted list ready for tabulate.
+        list: Formatted list ready for tabulate.
     """
     if selected_ids is None:
-        selected_ids = set()
+        selected_ids = set()  # Ensure selected_ids is a set to prevent errors
 
-    # Sort playlists by ID in ascending order
     sorted_playlists = sorted(playlists, key=lambda p: p.get("id", float("inf")))
+    table_data = []
 
-    return [
-        ["███" if playlist.get("id") in selected_ids else "-",  # Selection indicator
-         index + 1,  # Generate Count dynamically
-         playlist.get("id", "N/A"),  
-         truncate(playlist["user"], truncate_length), 
-         truncate(playlist["name"], truncate_length),
-         playlist["track_count"], 
-         format_duration(playlist["duration_ms"] // 1000)]
-        for index, playlist in enumerate(sorted_playlists)
-    ]
+    for index, playlist in enumerate(sorted_playlists):
+        # Ensure all required keys exist
+        playlist_id = playlist.get("id", "N/A")
+        user = truncate(playlist.get("user", "Unknown"), truncate_length)
+        name = truncate(playlist.get("name", "Unnamed Playlist"), truncate_length)
+        track_count = playlist.get("track_count", 0)
+        duration = format_duration(playlist.get("duration_ms", 0) // 1000)
+
+        row = []
+        if show_selection_column:
+            row.append("███" if playlist_id in selected_ids else "-")  # Selection indicator
+        
+        row.extend([index + 1, playlist_id, user, name, track_count, duration])
+        table_data.append(row)
+
+    return table_data
     
 
-def display_playlists_table(playlists, msg="", selected_ids=None):
+def display_playlists_table(playlists, msg="", selected_ids=None, show_selection_column=True):
     """
     Display playlists in a tabular format.
+    
     Args:
         playlists (list): List of playlists.
         msg (str): Message to display before the table.
         selected_ids (set): Set of selected playlist IDs.
+        show_selection_column (bool): Whether to include the "Sel." column.
     """
     try:
         print(f"\n{msg}\n")
-        print(tabulate(
-            prepare_table_data(playlists, selected_ids=selected_ids), 
-            headers=["Sel.", "#", "ID", "User", "Name", "Tracks", "Duration"],
-            tablefmt="grid",
-            colalign=("center", "right", "right", "left", "left", "right", "center")
-        ))
+
+        # Debugging output
+        print(f"🔍 Debug Info: show_selection_column={show_selection_column}, selected_ids={selected_ids}")
+        print(f"Total Playlists: {len(playlists)}")
+
+        if len(playlists) == 0:
+            print("⚠️ No playlists found! Returning without displaying a table.")
+            return
+
+        # Define headers based on whether the "Sel." column is included
+        headers = ["Sel.", "Count", "ID", "User", "Name", "Tracks", "Duration"] if show_selection_column else \
+                  ["Count", "ID", "User", "Name", "Tracks", "Duration"]
+
+        # Get table data and debug it
+        table_data = prepare_table_data(playlists, selected_ids=selected_ids, show_selection_column=show_selection_column)
+
+        print(f"🔍 Debug Table Data (First 3 Rows): {table_data[:3]}")
+        print(f"🔍 Expected Column Count: {len(headers)}, Actual Row Column Count: {len(table_data[0]) if table_data else 'No data'}")
+
+        # Ensure no None values exist in table_data
+        for row in table_data:
+            if any(value is None for value in row):
+                print(f"❌ Found None value in row: {row}")
+                return  # Exit early to prevent tabulate error
+
+        colalign_options = ("center", "center", "center", "left", "left", "center", "center") if show_selection_column else \
+                   ("center", "center", "left", "left", "center", "center")
+        
+        try:
+            # Use grid format but fallback to plain if it crashes
+            print(tabulate(
+                table_data, 
+                headers=headers,
+                tablefmt="grid",  # Restore grid format
+                colalign=colalign_options  # Use dynamic colalign based on selection column
+            ))
+        except Exception as e:
+            print(f"⚠️ Tabulate failed with 'grid' format: {e}")
+            print("📌 Falling back to plain table format...\n")
+            print(tabulate(
+                table_data, 
+                headers=headers,
+                tablefmt="plain"  # Fallback to plain if grid fails
+            )) 
     except Exception as e:
-        logger.error(f"Error displaying playlists: {e}")       
-        
-        
+        logger.error(f"Error displaying playlists: {e}")
+        print(f"❌ Error displaying playlists: {e}")
+
+
 def display_selected_playlists(selected_ids, all_playlists):
     """
     Display the selected playlists with their original IDs using tabulate.
@@ -251,7 +301,7 @@ if __name__ == "__main__":
     try:
         playlists = get_all_playlists_with_details()
         save_playlists_to_file(playlists)
-        display_playlists_table(playlists)
+        display_playlists_table(playlists, "Showing selected playlists", show_selection_column=False)
     except KeyboardInterrupt:
         print("\nProcess interrupted by user. Exiting...")
         sys.exit(0)

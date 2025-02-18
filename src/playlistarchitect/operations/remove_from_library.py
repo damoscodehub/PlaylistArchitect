@@ -37,10 +37,11 @@ def remove_playlists_from_library(sp, playlists):
 
 def remove_selected_playlists(sp, playlists):
     """Remove specific playlists from the library."""
-    selected_playlists = []
+    selected_playlists = [] # Track selected playlists
+    selected_ids = set()  # Track selected playlist IDs
 
     while True:
-        display_playlists_table(playlists, "Showing cached playlists")
+        display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False)
 
         selected_input = input("Select the IDs of the playlists to remove (comma-separated): ").strip()
 
@@ -77,7 +78,7 @@ def remove_selected_playlists(sp, playlists):
             sub_choice = menu_navigation(selection_menu, prompt="What do you want to do with this selection?")
 
             if sub_choice == "1":
-                display_playlists_table(selected_playlists, "Showing selected playlists")
+                display_playlists_table(selected_playlists, "Showing selected playlists", show_selection_column=False)
             elif sub_choice == "2":
                 edit_selection(selected_playlists, playlists)
             elif sub_choice == "3":
@@ -113,7 +114,7 @@ def edit_selection(selected_playlists, playlists):
         choice = menu_navigation(edit_menu, prompt="Edit selection:")
 
         if choice == "1":
-            display_playlists_table(playlists, "Showing cached playlists")
+            display_playlists_table(playlists, "Showing cached playlists", show_selection_column=True)
             try:
                 selected_ids = input("Enter playlist IDs to add (comma-separated): ").strip()
                 selected_ids = [int(x.strip()) for x in selected_ids.split(",")]
@@ -124,7 +125,7 @@ def edit_selection(selected_playlists, playlists):
             except ValueError:
                 print("Invalid input. Please enter numeric playlist IDs.")
         elif choice == "2":
-            display_playlists_table(selected_playlists, "Showing selected playlists")
+            display_playlists_table(selected_playlists, "Showing selected playlists", show_selection_column=False)
             try: 
                 selected_ids = input("Enter playlist IDs to remove from the selection (comma-separated): ").strip()
                 selected_ids = [int(x.strip()) for x in selected_ids.split(",")]

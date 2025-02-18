@@ -203,7 +203,7 @@ def backup_options(playlists):
             export_choice = menu_navigation(export_menu, prompt="Select export option:")
 
             if export_choice == "1":                
-                display_playlists_table(playlists, "Fetching saved/created playlists from cache")
+                display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False)
                 try:
                     selected_ids = input("Select playlist IDs to export (comma-separated): ").strip()
                     selected_ids = [int(x.strip()) for x in selected_ids.split(",")]

@@ -26,6 +26,8 @@ def main() -> None:
     Main function for the Playlist Architect application.
     Initializes the Spotify client, loads playlists, and provides a menu for user interaction.
     """
+    selected_ids = set()  # Track selected playlist IDs
+    
     try:
         # Initialize Spotify client
         initialize_spotify_client()
@@ -58,7 +60,7 @@ def main() -> None:
             remove_playlists_from_library(playlists)
             save_playlists_to_file(playlists)
         elif choice == "3":
-            display_playlists_table(playlists, "Showing cached playlists")
+            display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False)
         elif choice == "4":
             playlists = get_all_playlists_with_details()
             save_playlists_to_file(playlists)
