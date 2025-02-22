@@ -288,5 +288,5 @@ def backup_options(playlists):
             elif import_choice == "b":
                 continue
 
-        elif choice == "x":
-            break
+        elif choice == "c":  # Handle CANCEL_OPTION
+            break  # Exit the backup options loop and return to the main menu
