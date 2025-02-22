@@ -25,60 +25,117 @@ def export_playlists(playlists, selected_ids=None):
         playlists (list): List of playlists to export.
         selected_ids (list, optional): List of selected playlist IDs to export.
     """
-    sp = get_spotify_client()  # Retrieve Spotify client within the function
+    sp = get_spotify_client()
+    failed_playlists = []
+    total_tracks = 0
+    total_duration_ms = 0
+    successful_playlists = 0
 
     if selected_ids:
         playlists_to_export = [playlist for playlist in playlists if playlist["id"] in selected_ids]
     else:
         playlists_to_export = playlists
 
+    # Keep track of playlist names to detect duplicates
+    playlist_names = {}
+
     # Fetch track information for each playlist
     for playlist in playlists_to_export:
-        print(f'Backing up "{playlist["name"]}"...')
-        playlist_id = playlist["spotify_id"]
-        tracks = []
-        track_offset = 0
-        while True:
-            tracks_response = sp.playlist_items(
-                playlist_id,
-                offset=track_offset,
-                fields="items.track.uri,items.track.name,items.track.artists,items.track.album.name,items.track.duration_ms,next",
-                additional_types=["track"],
-            )
-            for track in tracks_response["items"]:
-                if track["track"]:
-                    tracks.append(
-                        {
-                            "uri": track["track"]["uri"],
-                            "name": track["track"]["name"],
-                            "artists": [artist["name"] for artist in track["track"]["artists"]],
-                            "album": track["track"]["album"]["name"],
-                            "duration_ms": track["track"].get("duration_ms", 0),
-                        }
+        try:
+            playlist_name = playlist["name"]
+            if playlist_name in playlist_names:
+                playlist_names[playlist_name] += 1
+                logger.warning(f'Found duplicate playlist "{playlist_name}" (occurrence {playlist_names[playlist_name]})')
+            else:
+                playlist_names[playlist_name] = 1
+
+            print(f'Backing up "{playlist_name}"...')
+            playlist_id = playlist["spotify_id"]
+            tracks = []
+            track_offset = 0
+            
+            while True:
+                try:
+                    tracks_response = sp.playlist_items(
+                        playlist_id,
+                        offset=track_offset,
+                        fields="items.track.uri,items.track.name,items.track.artists,items.track.album.name,items.track.duration_ms,next",
+                        additional_types=["track"],
                     )
-            if not tracks_response["next"]:
-                break
-            track_offset += 100
-        playlist["tracks"] = tracks
+                    
+                    for track in tracks_response["items"]:
+                        if track["track"]:
+                            tracks.append(
+                                {
+                                    "uri": track["track"]["uri"],
+                                    "name": track["track"]["name"],
+                                    "artists": [artist["name"] for artist in track["track"]["artists"]],
+                                    "album": track["track"]["album"]["name"],
+                                    "duration_ms": track["track"].get("duration_ms", 0),
+                                }
+                            )
+                    if not tracks_response["next"]:
+                        break
+                    track_offset += 100
+                    
+                except SpotifyException as e:
+                    if e.http_status == 404:
+                        error_msg = f'Playlist "{playlist_name}" (ID: {playlist_id}) not found or inaccessible'
+                        if playlist_names[playlist_name] > 1:
+                            error_msg += f" (duplicate {playlist_names[playlist_name]})"
+                        logger.error(error_msg)
+                        failed_playlists.append((playlist_name, "Playlist not found or inaccessible"))
+                    else:
+                        logger.error(f'Error fetching tracks for playlist "{playlist_name}": {str(e)}')
+                        failed_playlists.append((playlist_name, f"Error: {str(e)}"))
+                    break
+                    
+            playlist["tracks"] = tracks
+            if tracks:  # Only count if tracks were successfully retrieved
+                total_tracks += len(tracks)
+                total_duration_ms += sum(track["duration_ms"] for track in tracks)
+                successful_playlists += 1
+            
+        except Exception as e:
+            logger.error(f'Unexpected error processing playlist "{playlist["name"]}": {str(e)}')
+            failed_playlists.append((playlist["name"], f"Unexpected error: {str(e)}"))
+            continue
 
     # Remove the custom "id" key from each playlist
     for playlist in playlists_to_export:
         if "id" in playlist:
             del playlist["id"]
 
-    root = Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
+    # Only proceed with file export if there are playlists to export
+    if not all(playlist.get("tracks") == [] for playlist in playlists_to_export):
+        root = Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
 
-    file_path = asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
-    if file_path:
-        with open(file_path, "w") as file:
-            json.dump(playlists_to_export, file, indent=4)
-        print(f"Playlists exported successfully to {file_path}")
-    else:
-        print("Export canceled.")
-    root.destroy()
-
+        file_path = asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
+        root.destroy()
+        
+        if file_path:
+            with open(file_path, "w") as file:
+                json.dump(playlists_to_export, file, indent=4)
+            
+            # Calculate total duration in hours, minutes, and seconds
+            total_seconds = total_duration_ms // 1000
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60
+            
+            print(f"\nPlaylists exported successfully to {file_path}")
+            print(f"Total exported: {successful_playlists} playlists, {total_tracks} tracks, "
+                  f"{hours:02d}:{minutes:02d}:{seconds:02d} playback time")
+            
+            # Only show failed playlists if the export was completed
+            if failed_playlists:
+                print("\nThe following playlists could not be backed up:")
+                for name, reason in failed_playlists:
+                    print(f"- {name}: {reason}")
+        else:
+            print("\nExport canceled.")               
 
 def import_playlists(playlists, option):
     """
