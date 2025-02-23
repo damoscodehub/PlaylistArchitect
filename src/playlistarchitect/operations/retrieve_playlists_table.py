@@ -170,54 +170,34 @@ def load_playlists_from_file(filename="playlists_data.json"):
             logger.error(f"Error loading playlists from {filename}: {e}")
     return []
 
-def prepare_table_data(playlists, truncate_length=40, selected_ids=None, sort_by="id", sort_reverse=False):
+def prepare_table_data(playlists, truncate_length=40, selected_ids=None):
     """
-    Prepare data for table display with sorting options.
+    Prepare data for table display.
     
     Args:
         playlists (list): List of playlists.
         truncate_length (int): Max text length for truncation.
         selected_ids (set or None): Set of selected playlist IDs.
-        sort_by (str): Column to sort by. Options: "name", "user", "tracks", "duration", "id"
-        sort_reverse (bool): If True, sort in descending order
     """
-    if selected_ids is None:
-        selected_ids = set()
-
-    # Define sorting key functions
-    sort_keys = {
-        "name": lambda p: p.get("name", "").lower(),
-        "user": lambda p: p.get("user", "").lower(),
-        "tracks": lambda p: p.get("track_count", 0),
-        "duration": lambda p: p.get("duration_ms", 0),
-        "id": lambda p: p.get("id", 0)
-    }
-
-    # Sort playlists using the specified key
-    sort_key = sort_keys.get(sort_by.lower(), sort_keys["name"])  # Default to name sorting if invalid key
-    sorted_playlists = sorted(playlists, key=sort_key, reverse=sort_reverse)
-
     table_data = []
-    for playlist in sorted_playlists:
+    for playlist in playlists:
         playlist_id = playlist.get("id", "N/A")
         user = truncate(playlist.get("user", "Unknown"), truncate_length)
         name = truncate(playlist.get("name", "Unnamed Playlist"), truncate_length)
         track_count = playlist.get("track_count", 0)
         duration = format_duration(playlist.get("duration_ms", 0) // 1000)
-
         # Build row based on what columns should be included
         row = []
         if selected_ids is not None:  # Only add selection column if selected_ids is provided
             row.append("███" if playlist_id in selected_ids else "-")
         row.extend([playlist_id, user, name, track_count, duration])
         table_data.append(row)
-
     return table_data
 
 
-def display_playlists_table(playlists, msg="", selected_ids=None, show_selection_column=False, 
-                          show_count_column=False, sort_by="id", sort_reverse=False, 
-                          total_details=True):
+def display_playlists_table(playlists, msg="", selected_ids=None, show_selection_column=False,
+                            show_count_column=False, total_details=True, sort_by="id",
+                            sort_reverse=False, table_format="simple"):
     """
     Display playlists in a tabular format.
     
@@ -227,9 +207,9 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
         selected_ids (set): Set of selected playlist IDs.
         show_selection_column (bool): Whether to include the "Sel." column.
         show_count_column (bool): Whether to include the "Count" column.
-        sort_by (str): Column to sort by.
-        sort_reverse (bool): If True, sort in descending order.
         total_details (bool): Whether to display total playlists, tracks, and duration.
+        sort_by (str): Column to sort by. Options: "name", "user", "tracks", "duration", "id"
+        sort_reverse (bool): If True, sort in descending order
     """
     try:
         print(f"\n{msg}\n")
@@ -237,6 +217,19 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
         if not playlists:
             print("⚠️ No playlists found! Returning without displaying a table.")
             return
+
+        # Define sorting key functions
+        sort_keys = {
+            "name": lambda p: p.get("name", "").lower(),
+            "user": lambda p: p.get("user", "").lower(),
+            "tracks": lambda p: p.get("track_count", 0),
+            "duration": lambda p: p.get("duration_ms", 0),
+            "id": lambda p: p.get("id", 0)
+        }
+
+        # Sort playlists using the specified key
+        sort_key = sort_keys.get(sort_by.lower(), sort_keys["name"])  # Default to name sorting if invalid key
+        sorted_playlists = sorted(playlists, key=sort_key, reverse=sort_reverse)
 
         # Define headers and prepare table data
         headers = []
@@ -255,22 +248,20 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
 
         # Prepare table data with selection column only if needed
         table_data = prepare_table_data(
-            playlists,
-            selected_ids=selected_ids if show_selection_column else None,
-            sort_by=sort_by,
-            sort_reverse=sort_reverse
+            sorted_playlists,
+            selected_ids=None if not show_selection_column else selected_ids
         )
 
         # Add count numbers
         if show_count_column:
             for i, row in enumerate(table_data, 1):
-                row[0] = i  # Replace the placeholder with actual count
+                row.insert(0, i)
 
         # Print the table
         print(tabulate(
             table_data,
             headers=headers,
-            tablefmt="grid",
+            tablefmt=table_format,
             colalign=column_alignments
         ))
 
@@ -286,7 +277,7 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
     except Exception as e:
         logger.error(f"Error displaying playlists: {e}")
         print(f"❌ Error displaying playlists: {e}")
-
+        
 
 def show_selected_playlists(selected_playlists, all_playlists, msg="Currently selected playlists"):
     """

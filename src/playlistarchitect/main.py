@@ -62,7 +62,7 @@ def main() -> None:
             remove_playlists_from_library(sp, playlists)
             save_playlists_to_file(playlists)
         elif choice == "3":
-            display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False, show_count_column=True)
+            display_playlists_table(playlists, "Showing cached playlists")
         elif choice == "4":
             playlists = get_all_playlists_with_details()
             save_playlists_to_file(playlists)
