@@ -4,7 +4,7 @@ from playlistarchitect.auth.spotify_auth import get_spotify_client, initialize_s
 from playlistarchitect.operations.retrieve_playlists_table import (
     display_playlists_table,
     save_playlists_to_file,
-    display_selected_playlists,
+    show_selected_playlists,
 )
 from playlistarchitect.utils.helpers import menu_navigation, parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
@@ -119,7 +119,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
 
         if main_choice == "1":
             print("\nCurrently selected playlists:")
-            display_selected_playlists([p["id"] for p in selected_playlists], playlists)
+            show_selected_playlists(selected_playlists, playlists)
 
         elif main_choice == "2":
             display_playlists_table(playlists, "Showing saved/created playlists from cache", selected_ids={p["id"] for p in selected_playlists}, show_selection_column=True)
@@ -152,7 +152,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
         elif main_choice == "3":
             if selected_playlists:
                 print("\nCurrently selected playlists:")
-                display_selected_playlists([p["id"] for p in selected_playlists], playlists)
+                show_selected_playlists(selected_playlists, playlists)
                 try:
                     remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
                     selected_playlists = [p for p in selected_playlists if p["id"] not in remove_ids]
