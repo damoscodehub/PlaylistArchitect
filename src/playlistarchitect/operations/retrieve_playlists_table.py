@@ -63,9 +63,10 @@ def process_playlists() -> Generator[Dict, None, None]:
         logger.critical("Spotify client is None! Cannot continue.")
         raise RuntimeError("Spotify client is not initialized.")
 
-    # Load cached playlists
+    # Load cached playlists and initialize ID counter
     cached_playlists = load_playlists_from_file()
     cached_playlist_map = {p["spotify_id"]: p for p in cached_playlists}
+    next_id = max([p["id"] for p in cached_playlists], default=0)
 
     # First, get total number of playlists
     initial_response = sp.current_user_playlists(limit=1)
@@ -96,10 +97,11 @@ def process_playlists() -> Generator[Dict, None, None]:
                             if spotify_id in cached_playlist_map:
                                 result["id"] = cached_playlist_map[spotify_id]["id"]
                             else:
-                                # Assign new ID only to new playlists
-                                new_id = max([p["id"] for p in cached_playlists], default=0) + 1
-                                result["id"] = new_id
+                                # Assign new incremental ID for new playlists
+                                next_id += 1
+                                result["id"] = next_id
                                 cached_playlist_map[spotify_id] = result  # Store in cache
+                                cached_playlists.append(result)  # Add to cached_playlists list
 
                             processed_ids.add(spotify_id)
                             total_playlists += 1
@@ -122,6 +124,7 @@ def process_playlists() -> Generator[Dict, None, None]:
         "total_tracks": total_tracks,
         "total_duration": total_duration_ms // 1000  # Convert to seconds
     }
+
 
 def get_all_playlists_with_details() -> List[Dict]:
     """
@@ -181,13 +184,15 @@ def prepare_table_data(playlists, truncate_length=40, selected_ids=None, show_se
         list: Formatted list ready for tabulate.
     """
     if selected_ids is None:
-        selected_ids = set()  # Ensure selected_ids is a set to prevent errors
+        selected_ids = set()
 
-    sorted_playlists = sorted(playlists, key=lambda p: p.get("id", float("inf")))
+    # Sort playlists by name to maintain consistent display order
+    sorted_playlists = sorted(playlists, key=lambda p: p.get("name", "").lower())
     table_data = []
 
-    for index, playlist in enumerate(sorted_playlists):
-        # Ensure all required keys exist
+    # Use enumerate to generate the display count, starting from 1
+    for display_count, playlist in enumerate(sorted_playlists, 1):
+        # Get the stored ID for the playlist
         playlist_id = playlist.get("id", "N/A")
         user = truncate(playlist.get("user", "Unknown"), truncate_length)
         name = truncate(playlist.get("name", "Unnamed Playlist"), truncate_length)
@@ -196,13 +201,13 @@ def prepare_table_data(playlists, truncate_length=40, selected_ids=None, show_se
 
         row = []
         if show_selection_column:
-            row.append("███" if playlist_id in selected_ids else "-")  # Selection indicator
+            row.append("███" if playlist_id in selected_ids else "-")
         
-        row.extend([index + 1, playlist_id, user, name, track_count, duration])
+        # Use display_count for the Count column and playlist_id for the ID column
+        row.extend([display_count, playlist_id, user, name, track_count, duration])
         table_data.append(row)
 
-    return table_data
-    
+    return table_data   
 
 def display_playlists_table(playlists, msg="", selected_ids=None, show_selection_column=True):
     """
