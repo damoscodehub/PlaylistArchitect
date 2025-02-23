@@ -15,6 +15,7 @@ from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
 from playlistarchitect.utils.helpers import menu_navigation
 from playlistarchitect.utils.constants import BACK_OPTION
+from playlistarchitect.auth.spotify_auth import get_spotify_client
 
 # Set up logging
 setup_logging()
@@ -57,7 +58,8 @@ def main() -> None:
             create_new_playlist(playlists)
             save_playlists_to_file(playlists)
         elif choice == "2":
-            remove_playlists_from_library(playlists)
+            sp = get_spotify_client()
+            remove_playlists_from_library(sp, playlists)
             save_playlists_to_file(playlists)
         elif choice == "3":
             display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False)
