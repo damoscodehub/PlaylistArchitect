@@ -89,7 +89,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     privacy = "public" if privacy_choice == "1" else "private"
 
     # Display and select playlists
-    display_playlists_table(playlists, "Showing saved/created playlists from cache", show_selection_column=False)
+    display_playlists_table(playlists, "Showing saved/created playlists from cache")
 
     while True:
         selected_input = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip()
@@ -117,8 +117,7 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
         }
         main_choice = menu_navigation(main_menu, prompt="Select an option:")
 
-        if main_choice == "1":
-            print("\nCurrently selected playlists:")
+        if main_choice == "1":            
             show_selected_playlists(selected_playlists, playlists)
 
         elif main_choice == "2":
