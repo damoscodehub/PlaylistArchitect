@@ -187,8 +187,8 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
 
                 elif proceed_choice == "2":
                     time_menu = {
-                        "1": "Set time for each playlist",
-                        "2": "Set total time",
+                        "1": "Set time for each playlist (the same for all playlists)",
+                        "2": "Set total time (equally divided between all playlists)",
                         "3": "Not specified (use full playlists)",
                     }
                     time_choice = menu_navigation(time_menu, prompt="Select time option:")
