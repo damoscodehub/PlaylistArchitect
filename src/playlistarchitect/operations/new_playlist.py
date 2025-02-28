@@ -113,81 +113,167 @@ def get_songs_from_playlist(
 
     return selected_songs, current_duration
 
-def display_selected_playlists(selected_playlist_blocks, playlists):
-    """
-    Display selected playlists with their selected times, used time, and available time.
-    """
-    table_data = []
+def calculate_available_time(playlist_id, selected_playlist_blocks, playlists):
+    """Calculate available time for a playlist based on current selections"""
+    playlist = next((p for p in playlists if p["id"] == playlist_id), None)
+    if not playlist:
+        return 0
     
-    # Group by playlist ID to calculate total used time
-    usage_by_id = {}
+    total_seconds = playlist.get("duration_ms", 0) // 1000
+    used_seconds = 0
+    
+    # Calculate used time for this playlist
     for block in selected_playlist_blocks:
-        playlist_id = block["playlist"]["id"]
-        duration_seconds = block.get("duration_seconds", 0) or 0
-        
-        if playlist_id not in usage_by_id:
-            usage_by_id[playlist_id] = {
-                "blocks": 0,
-                "used_seconds": 0,
-                "playlist": block["playlist"]
-            }
-        
-        usage_by_id[playlist_id]["blocks"] += 1
-        usage_by_id[playlist_id]["used_seconds"] += duration_seconds
+        if block["playlist"]["id"] == playlist_id:
+            if block.get("duration_seconds") is None:
+                # If any block uses the full playlist, all time is used
+                return 0
+            else:
+                used_seconds += block.get("duration_seconds", 0)
     
-    # Create table data with usage info
-    for playlist_id, usage in usage_by_id.items():
-        playlist = usage["playlist"]
-        total_seconds = playlist.get("duration_ms", 0) // 1000
-        used_seconds = usage["used_seconds"]
-        
-        # If duration_seconds is None for any block, consider the full playlist as used
-        if any(block.get("duration_seconds") is None for block in selected_playlist_blocks 
-               if block["playlist"]["id"] == playlist_id):
-            used_seconds = total_seconds
-        
-        available_seconds = max(0, total_seconds - used_seconds)
-        
-        table_data.append([
-            playlist["id"],
-            playlist["user"],
-            playlist["name"],
-            usage["blocks"],
-            format_duration_hhmm(total_seconds),
-            format_duration_hhmm(used_seconds),
-            format_duration_hhmm(available_seconds)
-        ])
-    
-    print(tabulate(
-        table_data, 
-        headers=["ID", "User", "Name", "# Blocks", "Total", "Used", "Available"], 
-        tablefmt="simple"
-    ))
-    
-    # Also show detailed blocks
-    print("\nSelected blocks (detailed):")
+    return max(0, total_seconds - used_seconds)
+
+def display_selected_blocks(selected_playlist_blocks, playlists):
+    """
+    Display selected blocks with detailed information.
+    """
+    # Only show the detailed blocks table
+    print("\nSelected blocks:")
     blocks_data = []
     for i, block in enumerate(selected_playlist_blocks):
         playlist = block["playlist"]
         duration_seconds = block.get("duration_seconds")
         
         if duration_seconds is None:
-            duration_str = "Full playlist"
+            # Show actual total time instead of "Full playlist"
+            total_seconds = playlist.get("duration_ms", 0) // 1000
+            duration_str = format_duration_hhmm(total_seconds)
         else:
             duration_str = format_duration_hhmm(duration_seconds)
             
         blocks_data.append([
             i+1,
             playlist["id"],
+            playlist["user"],
             playlist["name"],
             duration_str
         ])
     
     print(tabulate(
         blocks_data,
-        headers=["Block #", "ID", "Name", "Selected Time"],
+        headers=["Block #", "ID", "User", "Name", "Selected Time"],
         tablefmt="simple"
     ))
+
+def validate_playlist_blocks(selected_playlist_blocks, playlists):
+    """
+    Validate if selected block times exceed available times and
+    interactively correct problematic blocks.
+    """
+    # First, identify problematic blocks
+    problematic_blocks = []
+    for i, block in enumerate(selected_playlist_blocks):
+        playlist_id = block["playlist"]["id"]
+        duration_seconds = block.get("duration_seconds")
+        
+        # Skip blocks with None duration (full playlist)
+        if duration_seconds is None:
+            continue
+        
+        # Calculate available time excluding this block's contribution
+        temp_blocks = selected_playlist_blocks.copy()
+        temp_blocks.pop(i)
+        available_seconds = calculate_available_time(playlist_id, temp_blocks, playlists)
+        
+        if duration_seconds > available_seconds:
+            problematic_blocks.append((i, block, available_seconds))
+    
+    # If no problematic blocks, return True
+    if not problematic_blocks:
+        return True
+    
+    # Display problematic blocks
+    block_numbers = ", ".join(str(i+1) for i, _, _ in problematic_blocks)
+    print(f"The time selected for blocks #{block_numbers} is greater than the time available of each playlist")
+    
+    # Create table with all blocks, highlighting problematic ones
+    all_blocks_data = []
+    for i, block in enumerate(selected_playlist_blocks):
+        playlist = block["playlist"]
+        duration_seconds = block.get("duration_seconds")
+        
+        # Check if this is a problematic block
+        is_problematic = any(pb_i == i for pb_i, _, _ in problematic_blocks)
+        
+        # Calculate the available time for this block
+        temp_blocks = selected_playlist_blocks.copy()
+        temp_blocks.pop(i)
+        available_seconds = calculate_available_time(playlist_id, temp_blocks, playlists)
+        
+        # Format duration
+        if duration_seconds is None:
+            total_seconds = playlist.get("duration_ms", 0) // 1000
+            selected_str = format_duration_hhmm(total_seconds)
+        else:
+            selected_str = format_duration_hhmm(duration_seconds)
+        
+        # Format available column
+        if is_problematic:
+            available_str = format_duration_hhmm(available_seconds)
+            warning = "X"
+        else:
+            available_str = "✓"
+            warning = ""
+            
+        all_blocks_data.append([
+            warning,
+            i+1,
+            playlist["id"],
+            playlist["user"],
+            playlist["name"],
+            selected_str,
+            available_str
+        ])
+    
+    print(tabulate(
+        all_blocks_data,
+        headers=["!", "Block #", "ID", "User", "Name", "Selected", "Available"],
+        tablefmt="simple"
+    ))
+    
+    # Fix problematic blocks one by one
+    for i, block, available_seconds in problematic_blocks:
+        playlist = block["playlist"]
+        fixed = False
+        
+        while not fixed:
+            prompt = f"For block #{i+1} (ID: {playlist['id']}, User: {playlist['user']}, Name: {playlist['name']})\n"
+            prompt += f"Select a time (in HH:MM) up to {format_duration_hhmm(available_seconds)}: "
+            
+            time_str = input(prompt).strip()
+            
+            # Parse the time input
+            try:
+                if ':' in time_str:
+                    parts = time_str.strip().split(':')
+                    if len(parts) == 2:
+                        hours, minutes = map(int, parts)
+                        new_duration_seconds = (hours * 3600) + (minutes * 60)
+                        
+                        if new_duration_seconds <= available_seconds:
+                            # Update the block duration
+                            selected_playlist_blocks[i]["duration_seconds"] = new_duration_seconds
+                            fixed = True
+                        else:
+                            print(f"Time exceeds available time. Maximum is {format_duration_hhmm(available_seconds)}.")
+                    else:
+                        print("Invalid time format. Expected HH:MM.")
+                else:
+                    print("Invalid time format. Expected HH:MM.")
+            except ValueError:
+                print("Invalid time format. Please enter hours and minutes as numbers.")
+    
+    return True
 
 def display_playlist_selection_table(playlists, selected_blocks):
     """
@@ -291,6 +377,9 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                         "playlist": playlist,
                         "duration_seconds": duration_seconds
                     })
+            
+            # Validate all blocks
+            validate_playlist_blocks(selected_playlist_blocks, playlists)
             break
         else:
             print("No valid playlists selected. Please enter at least one valid playlist ID.")
@@ -301,7 +390,7 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
     while True:
         # Main menu
         main_menu = {
-            "1": "Show selected playlists",
+            "1": "Show selected blocks",  # Renamed from "Show selected playlists"
             "2": "Add playlists to selection",
             "3": "Remove playlists from selection",
             "4": "Proceed with current selection",
@@ -311,8 +400,8 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
         main_choice = menu_navigation(main_menu, prompt="Select an option:")
 
         if main_choice == "1":
-            # Display selected playlists with their selected times
-            display_selected_playlists(selected_playlist_blocks, playlists)
+            # Display only the blocks table
+            display_selected_blocks(selected_playlist_blocks, playlists)
 
         elif main_choice == "2":
             # Display available playlists with usage info
@@ -323,6 +412,7 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
             selected_playlists_with_time = parse_playlist_selection(selected_input)
             
             if selected_playlists_with_time:
+                # Add playlists to selection
                 for playlist_id, duration_seconds in selected_playlists_with_time:
                     playlist = next((p for p in playlists if p["id"] == playlist_id), None)
                     if playlist:
@@ -330,13 +420,16 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                             "playlist": playlist,
                             "duration_seconds": duration_seconds
                         })
+                
+                # Validate all blocks
+                validate_playlist_blocks(selected_playlist_blocks, playlists)
             else:
                 print("No valid playlists selected.")
 
         elif main_choice == "3":
             if selected_playlist_blocks:
                 # Display blocks with index numbers
-                display_selected_playlists(selected_playlist_blocks, playlists)
+                display_selected_blocks(selected_playlist_blocks, playlists)
                 
                 try:
                     remove_blocks = input("Enter block numbers to remove (comma-separated): ").strip()
@@ -417,10 +510,10 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                     print(f"Time option: {time_option}")
 
                     if input("\nCreate playlist? (y/n): ").lower() == "y":
+                        # Track which tracks have been used from each playlist to avoid duplicates
+                        used_track_uris = set()
                         all_selected_songs = []
                         total_duration = 0
-                        
-                        logger.debug(f"Playlists before creation: {playlists}")
                         
                         for block in selected_playlist_blocks:
                             playlist = block["playlist"]
@@ -432,13 +525,22 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                                 duration_seconds,
                                 variation_ms,
                             )
-                            all_selected_songs.extend(playlist_songs)
-                            total_duration += duration
+                            
+                            # Filter out already used tracks
+                            unique_songs = [song for song in playlist_songs 
+                                          if song["uri"] not in used_track_uris]
+                            
+                            # Add these track URIs to the used set
+                            used_track_uris.update([song["uri"] for song in unique_songs])
+                            
+                            all_selected_songs.extend(unique_songs)
+                            total_duration += sum(song["duration_ms"] for song in unique_songs)
 
                         if shuffle_option == "Shuffle tracks":
                             random.shuffle(all_selected_songs)
                         elif shuffle_option == "Shuffle playlists":
                             random.shuffle(selected_playlist_blocks)
+                            used_track_uris = set()
                             all_selected_songs = []
                             total_duration = 0
                             
@@ -452,8 +554,16 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                                     duration_seconds,
                                     variation_ms,
                                 )
-                                all_selected_songs.extend(playlist_songs)
-                                total_duration += duration
+                                
+                                # Filter out already used tracks
+                                unique_songs = [song for song in playlist_songs 
+                                              if song["uri"] not in used_track_uris]
+                                
+                                # Add these track URIs to the used set
+                                used_track_uris.update([song["uri"] for song in unique_songs])
+                                
+                                all_selected_songs.extend(unique_songs)
+                                total_duration += sum(song["duration_ms"] for song in unique_songs)
                                 
                         try:
                             new_playlist = sp.user_playlist_create(
@@ -477,8 +587,6 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                                 "duration": format_duration(total_duration),
                             })
                             save_playlists_to_file(playlists)
-                            
-                            logger.debug(f"Playlists after creation: {playlists}")
                             
                             print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
                             return
