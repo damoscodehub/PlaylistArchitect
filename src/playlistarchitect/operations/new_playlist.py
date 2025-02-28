@@ -9,18 +9,67 @@ from playlistarchitect.operations.retrieve_playlists_table import (
 from playlistarchitect.utils.helpers import menu_navigation, parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
 from typing import List, Dict, Optional, Tuple
+from tabulate import tabulate
 
 logger = logging.getLogger(__name__)
+
+# Add this new function to format durations as HH:MM
+def format_duration_hhmm(seconds):
+    """Format seconds to hh:mm format without seconds"""
+    hours, seconds = divmod(seconds, 3600)
+    minutes, _ = divmod(seconds, 60)
+    return f"{hours:02}:{minutes:02}"
+
+def parse_playlist_selection(input_str):
+    """
+    Parse the input string in the format 'ID-hh:mm' or 'ID'.
+    Returns a list of tuples (playlist_id, duration_seconds).
+    """
+    selected_playlists = []
+    for item in input_str.split(','):
+        item = item.strip()
+        if '-' in item:
+            playlist_id, time_str = item.split('-')
+            try:
+                playlist_id = int(playlist_id.strip())
+                if ':' in time_str:
+                    # Check if time_str contains hours and minutes
+                    parts = time_str.strip().split(':')
+                    if len(parts) == 2:
+                        hours, minutes = map(int, parts)
+                        duration_seconds = (hours * 3600) + (minutes * 60)  # Convert to seconds
+                    else:
+                        print(f"Invalid time format for '{item}'. Expected hh:mm. Skipping.")
+                        continue
+                else:
+                    print(f"Invalid time format for '{item}'. Expected hh:mm. Skipping.")
+                    continue
+                selected_playlists.append((playlist_id, duration_seconds))
+            except ValueError:
+                print(f"Invalid format for '{item}'. Skipping.")
+        else:
+            try:
+                playlist_id = int(item.strip())
+                selected_playlists.append((playlist_id, None))  # None means full playlist
+            except ValueError:
+                print(f"Invalid playlist ID '{item}'. Skipping.")
+    return selected_playlists
+
 
 def get_songs_from_playlist(
     sp,  # Add sp as an argument
     playlist_id: str, 
-    total_duration_ms: Optional[int] = None, 
+    total_duration_seconds: Optional[int] = None, 
     acceptable_deviation_ms: Optional[int] = None
 ) -> Tuple[List[Dict[str, str]], int]:
     """Fetch songs from a playlist, optionally limiting by duration."""
     song_list = []
     track_offset = 0
+    
+    # Convert total_duration_seconds to milliseconds if provided
+    total_duration_ms = None
+    if total_duration_seconds is not None:
+        total_duration_ms = total_duration_seconds * 1000  # Convert seconds to milliseconds
 
     while True:
         try:
@@ -56,9 +105,9 @@ def get_songs_from_playlist(
     current_duration = 0
     available_songs = song_list.copy()
 
-    while available_songs and current_duration < total_duration_ms - acceptable_deviation_ms:
+    while available_songs and current_duration < total_duration_ms - (acceptable_deviation_ms or 0):
         song = random.choice(available_songs)
-        if current_duration + song["duration_ms"] <= total_duration_ms + acceptable_deviation_ms:
+        if current_duration + song["duration_ms"] <= total_duration_ms + (acceptable_deviation_ms or 0):
             selected_songs.append(song)
             current_duration += song["duration_ms"]
         available_songs.remove(song)
@@ -92,15 +141,19 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
     display_playlists_table(playlists, "Showing saved/created playlists from cache")
 
     while True:
-        selected_input = input("Select playlist IDs (comma-separated) to fetch songs from: ").strip()
-        try:
-            selected_ids = [int(x.strip()) for x in selected_input.split(",")]
-            if selected_ids:
-                selected_playlists = [p for p in playlists if p["id"] in selected_ids]
-                break
-            print("No playlists selected. Please enter at least one playlist ID.")
-        except ValueError:
-            print("Invalid input. Please enter valid numeric playlist IDs.")
+        selected_input = input("Select playlist IDs (comma-separated) in the format 'ID-hh:mm' or 'ID': ").strip()
+        selected_playlists_with_time = parse_playlist_selection(selected_input)
+        
+        if selected_playlists_with_time:
+            selected_playlists = []
+            for playlist_id, duration_seconds in selected_playlists_with_time:
+                playlist = next((p for p in playlists if p["id"] == playlist_id), None)
+                if playlist:
+                    playlist["selected_duration_seconds"] = duration_seconds
+                    selected_playlists.append(playlist)
+            break
+        else:
+            print("No valid playlists selected. Please enter at least one valid playlist ID.")
 
     time_ms = None
     variation_ms = None
@@ -117,8 +170,24 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
         }
         main_choice = menu_navigation(main_menu, prompt="Select an option:")
 
-        if main_choice == "1":            
-            show_selected_playlists(selected_playlists, playlists)
+        if main_choice == "1":
+            # Display selected playlists with their selected times - FIXED
+            table_data = []
+            for playlist in selected_playlists:
+                duration_seconds = playlist.get("selected_duration_seconds")
+                if duration_seconds is None:
+                    # Use the full playlist duration (already in seconds)
+                    duration_str = format_duration_hhmm(playlist.get("duration_ms", 0) // 1000)
+                else:
+                    # Use the selected duration (already in seconds)
+                    duration_str = format_duration_hhmm(duration_seconds)
+                table_data.append([
+                    playlist["id"],
+                    playlist["user"],
+                    playlist["name"],
+                    duration_str
+                ])
+            print(tabulate(table_data, headers=["ID", "User", "Name", "Selected Time"], tablefmt="simple"))
 
         elif main_choice == "2":
             display_playlists_table(playlists, "Showing saved/created playlists from cache", selected_ids={p["id"] for p in selected_playlists}, show_selection_column=True)
@@ -147,11 +216,26 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
             except ValueError:
                 print("❌ Invalid input. Please enter numeric playlist IDs.")
 
-
         elif main_choice == "3":
             if selected_playlists:
                 print("\nCurrently selected playlists:")
-                show_selected_playlists(selected_playlists, playlists)
+                # FIXED: Also update the display format here
+                table_data = []
+                for playlist in selected_playlists:
+                    duration_seconds = playlist.get("selected_duration_seconds")
+                    if duration_seconds is None:
+                        # Use the full playlist duration (already in seconds)
+                        duration_str = format_duration_hhmm(playlist.get("duration_ms", 0) // 1000)
+                    else:
+                        # Use the selected duration (already in seconds)
+                        duration_str = format_duration_hhmm(duration_seconds)
+                    table_data.append([
+                        playlist["id"],
+                        playlist["user"],
+                        playlist["name"],
+                        duration_str
+                    ])
+                print(tabulate(table_data, headers=["ID", "User", "Name", "Selected Time"], tablefmt="simple"))
                 try:
                     remove_ids = [int(x.strip()) for x in input("Enter playlist IDs to remove (comma-separated): ").strip().split(",")]
                     selected_playlists = [p for p in selected_playlists if p["id"] not in remove_ids]
@@ -227,10 +311,11 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                         logger.debug(f"Playlists before creation: {playlists}")
                         
                         for playlist in selected_playlists:
+                            # FIXED: Pass the selected_duration_seconds correctly
                             playlist_songs, duration = get_songs_from_playlist(
                                 sp,  # Pass sp as the first argument
                                 playlist["spotify_id"],
-                                time_ms if time_option.startswith("Each") else None,
+                                playlist.get("selected_duration_seconds"),  # This now contains seconds
                                 variation_ms,
                             )
                             all_selected_songs.extend(playlist_songs)
@@ -240,8 +325,12 @@ def create_new_playlist(playlists: List[Dict[str, str]]) -> None:
                             random.shuffle(all_selected_songs)
                         elif shuffle_option == "Shuffle playlists":
                             random.shuffle(selected_playlists)
+                            # FIXED: Make sure to pass sp when getting songs from playlist
                             for playlist in selected_playlists:
-                                playlist_songs, _ = get_songs_from_playlist(playlist["spotify_id"])
+                                playlist_songs, _ = get_songs_from_playlist(
+                                    sp,
+                                    playlist["spotify_id"]
+                                )
                                 all_selected_songs.extend(playlist_songs)
                         try:
                             new_playlist = sp.user_playlist_create(
