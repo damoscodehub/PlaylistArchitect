@@ -7,22 +7,77 @@ from playlistarchitect.operations.retrieve_playlists_table import (
 )
 from playlistarchitect.utils.helpers import menu_navigation, parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, Callable
 from tabulate import tabulate
 
 logger = logging.getLogger(__name__)
 
-# Format durations as HH:MM
+SELECT_IDS = "Set the comma-separated track blocks in the format 'ID' (to use all the available time) or 'ID-HH:MM' (to use a custom time). 'b' to go back.\n> "
+
 def format_duration_hhmm(seconds):
     """Format seconds to hh:mm format without seconds"""
     hours, seconds = divmod(seconds, 3600)
     minutes, _ = divmod(seconds, 60)
     return f"{hours:02}:{minutes:02}"
 
+def safe_input(prompt, validator=None, error_msg="Invalid input"):
+    """
+    Handle input with validation and error messages
+    
+    Parameters:
+    prompt (str): The prompt to display to the user
+    validator (Callable): Function that validates the input, returns True if valid
+    error_msg (str): Error message to display if validation fails
+    
+    Returns:
+    str: The validated user input
+    """
+    while True:
+        user_input = input(prompt).strip()
+        if user_input.lower() in ['b', 'back', 'c', 'cancel']:
+            return user_input
+        
+        if validator is None or validator(user_input):
+            return user_input
+        
+        print(error_msg)
+
+def validate_time_format(time_str):
+    """
+    Validate time format is HH:MM or HH:MM:SS
+    
+    Parameters:
+    time_str (str): The time string to validate
+    
+    Returns:
+    bool: True if the format is valid, False otherwise
+    """
+    if not time_str:
+        return False
+    
+    parts = time_str.split(':')
+    if len(parts) not in [2, 3]:
+        return False
+    
+    try:
+        # Check if all parts are valid integers
+        for part in parts:
+            int(part)
+        return True
+    except ValueError:
+        return False
+
 def parse_playlist_selection(input_str):
     """
     Parse the input string in the format 'ID-hh:mm' or 'ID'.
     Returns a list of tuples (playlist_id, duration_seconds).
+    For plain IDs, duration_seconds will be None, indicating to use available time.
+    
+    Parameters:
+    input_str (str): Comma-separated string of playlist IDs with optional durations
+    
+    Returns:
+    List[Tuple[int, Optional[int]]]: List of (playlist_id, duration_seconds) tuples
     """
     selected_playlists = []
     for item in input_str.split(','):
@@ -49,11 +104,11 @@ def parse_playlist_selection(input_str):
         else:
             try:
                 playlist_id = int(item.strip())
-                selected_playlists.append((playlist_id, None))  # None means full playlist
+                # When just ID is provided, return None to indicate "use available time"
+                selected_playlists.append((playlist_id, None))
             except ValueError:
                 print(f"Invalid playlist ID '{item}'. Skipping.")
     return selected_playlists
-
 
 def get_songs_from_playlist(
     sp,
@@ -61,7 +116,18 @@ def get_songs_from_playlist(
     total_duration_seconds: Optional[int] = None, 
     acceptable_deviation_ms: Optional[int] = None
 ) -> Tuple[List[Dict[str, str]], int]:
-    """Fetch songs from a playlist, optionally limiting by duration."""
+    """
+    Fetch songs from a playlist, optionally limiting by duration.
+    
+    Parameters:
+    sp: Spotify client
+    playlist_id (str): Spotify playlist ID
+    total_duration_seconds (Optional[int]): Duration limit in seconds
+    acceptable_deviation_ms (Optional[int]): Acceptable deviation in milliseconds
+    
+    Returns:
+    Tuple[List[Dict[str, str]], int]: List of songs and total duration in milliseconds
+    """
     song_list = []
     track_offset = 0
     
@@ -70,12 +136,13 @@ def get_songs_from_playlist(
     if total_duration_seconds is not None:
         total_duration_ms = total_duration_seconds * 1000  # Convert seconds to milliseconds
 
+    # Fetch all tracks from the playlist
     while True:
         try:
             tracks_response = sp.playlist_items(
                 playlist_id,
                 offset=track_offset,
-                fields="items.track.uri,items.track.duration_ms,items.track.name",
+                fields="items.track.uri,items.track.duration_ms,items.track.name,next",
                 additional_types=["track"],
             )
             if "items" in tracks_response:
@@ -96,6 +163,7 @@ def get_songs_from_playlist(
             break
         track_offset += 100
 
+    # If no duration limit, return all songs
     if total_duration_ms is None:
         return song_list, sum(song["duration_ms"] for song in song_list)
 
@@ -114,7 +182,17 @@ def get_songs_from_playlist(
     return selected_songs, current_duration
 
 def calculate_available_time(playlist_id, selected_playlist_blocks, playlists):
-    """Calculate available time for a playlist based on current selections"""
+    """
+    Calculate available time for a playlist based on current selections
+    
+    Parameters:
+    playlist_id (int): The playlist ID
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
+    
+    Returns:
+    int: Available time in seconds
+    """
     playlist = next((p for p in playlists if p["id"] == playlist_id), None)
     if not playlist:
         return 0
@@ -133,9 +211,60 @@ def calculate_available_time(playlist_id, selected_playlist_blocks, playlists):
     
     return max(0, total_seconds - used_seconds)
 
+def process_playlist_selection(selected_input, playlists, selected_playlist_blocks):
+    """
+    Process playlist selection input and add valid selections to blocks.
+    
+    Parameters:
+    selected_input (str): User input with playlist selections
+    playlists (List[Dict]): List of all playlists
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    
+    Returns:
+    List[int]: Indices of newly added blocks
+    """
+    start_block_index = len(selected_playlist_blocks)
+    selected_playlists_with_time = parse_playlist_selection(selected_input)
+    
+    if not selected_playlists_with_time:
+        print("No valid playlists selected.")
+        return []
+    
+    no_available_time_ids = []
+    for playlist_id, duration_seconds in selected_playlists_with_time:
+        playlist = next((p for p in playlists if p["id"] == playlist_id), None)
+        if playlist:
+            # If duration_seconds is None, use available time
+            if duration_seconds is None:
+                available_seconds = calculate_available_time(playlist_id, selected_playlist_blocks, playlists)
+                if available_seconds <= 0:
+                    no_available_time_ids.append(playlist_id)
+                    continue
+                duration_seconds = available_seconds
+                
+            selected_playlist_blocks.append({
+                "playlist": playlist,
+                "duration_seconds": duration_seconds
+            })
+    
+    # Notify if any playlists had no available time
+    if no_available_time_ids:
+        if len(no_available_time_ids) == 1:
+            print(f"The playlist with ID {no_available_time_ids[0]} has no available playback time. No further track block was created with it.")
+        else:
+            id_str = ", ".join(str(id) for id in no_available_time_ids)
+            print(f"The playlists with IDs {id_str} have no available playback time. No further track blocks were created with them.")
+    
+    # Return list of indices of newly added blocks
+    return list(range(start_block_index, len(selected_playlist_blocks)))
+
 def display_selected_blocks(selected_playlist_blocks, playlists):
     """
     Display selected blocks with detailed information.
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
     """
     # Only show the detailed blocks table
     print("\nSelected blocks:")
@@ -159,20 +288,33 @@ def display_selected_blocks(selected_playlist_blocks, playlists):
             duration_str
         ])
     
+    print()
     print(tabulate(
         blocks_data,
         headers=["Block #", "ID", "User", "Name", "Selected Time"],
         tablefmt="simple"
     ))
 
-def validate_playlist_blocks(selected_playlist_blocks, playlists):
+def validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices=None):
     """
     Validate if selected block times exceed available times and
     interactively correct problematic blocks.
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
+    new_block_indices (Optional[List[int]]): Indices of newly added blocks to validate
+    
+    Returns:
+    bool: True if all blocks are valid or have been fixed
     """
+    # If new_block_indices is None, validate all blocks
+    indices_to_validate = new_block_indices if new_block_indices is not None else range(len(selected_playlist_blocks))
+    
     # First, identify problematic blocks
     problematic_blocks = []
-    for i, block in enumerate(selected_playlist_blocks):
+    for i in indices_to_validate:
+        block = selected_playlist_blocks[i]
         playlist_id = block["playlist"]["id"]
         duration_seconds = block.get("duration_seconds")
         
@@ -208,7 +350,7 @@ def validate_playlist_blocks(selected_playlist_blocks, playlists):
         # Calculate the available time for this block
         temp_blocks = selected_playlist_blocks.copy()
         temp_blocks.pop(i)
-        available_seconds = calculate_available_time(playlist_id, temp_blocks, playlists)
+        available_seconds = calculate_available_time(playlist["id"], temp_blocks, playlists)
         
         # Format duration
         if duration_seconds is None:
@@ -278,6 +420,10 @@ def validate_playlist_blocks(selected_playlist_blocks, playlists):
 def display_playlist_selection_table(playlists, selected_blocks):
     """
     Display playlist selection table with usage statistics.
+    
+    Parameters:
+    playlists (List[Dict]): List of all playlists
+    selected_blocks (List[Dict]): Currently selected playlist blocks
     """
     # Calculate usage by playlist ID
     usage_by_id = {}
@@ -314,6 +460,9 @@ def display_playlist_selection_table(playlists, selected_blocks):
         # Display blocks column
         blocks_display = str(usage["blocks"]) if usage["blocks"] > 0 else "-"
         
+        # Format available time
+        available_time_str = "✗" if available_seconds == 0 else format_duration_hhmm(available_seconds)
+        
         table_data.append([
             blocks_display,
             playlist["id"],
@@ -322,9 +471,10 @@ def display_playlist_selection_table(playlists, selected_blocks):
             playlist["track_count"],
             format_duration_hhmm(total_seconds),
             format_duration_hhmm(used_seconds),
-            format_duration_hhmm(available_seconds)
+            available_time_str
         ])
     
+    print()
     print(tabulate(
         table_data,
         headers=["# Blocks", "ID", "User", "Name", "Tracks", "Total", "Used", "Available"],
@@ -336,61 +486,380 @@ def display_playlist_selection_table(playlists, selected_blocks):
     total_duration_ms = sum(p.get("duration_ms", 0) for p in playlists)
     total_duration_str = format_duration(total_duration_ms)
     
-    print(f"{total_playlists} playlists, {total_tracks} tracks, {total_duration_str} playback time.")
+    print(f"\n{total_playlists} playlists, {total_tracks} tracks, {total_duration_str} playback time.")
+
+def apply_shuffle_strategy(selected_playlist_blocks, shuffle_option, sp, variation_ms):
+    """
+    Applies the selected shuffle strategy and returns the songs list
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    shuffle_option (str): Shuffle strategy to apply
+    sp: Spotify client
+    variation_ms (Optional[int]): Acceptable time variation in milliseconds
+    
+    Returns:
+    Tuple[List[Dict], int]: Selected songs and total duration in milliseconds
+    """
+    used_track_uris = set()
+    all_selected_songs = []
+    
+    # If shuffling playlists, do it before processing
+    blocks_to_process = selected_playlist_blocks.copy()
+    if shuffle_option == "Shuffle playlists":
+        random.shuffle(blocks_to_process)
+    
+    # Process each block
+    for block in blocks_to_process:
+        playlist = block["playlist"]
+        duration_seconds = block.get("duration_seconds")
+        
+        playlist_songs, _ = get_songs_from_playlist(
+            sp,
+            playlist["spotify_id"],
+            duration_seconds,
+            variation_ms,
+        )
+        
+        # Filter out already used tracks
+        unique_songs = [song for song in playlist_songs 
+                       if song["uri"] not in used_track_uris]
+        
+        # Add these track URIs to the used set
+        used_track_uris.update([song["uri"] for song in unique_songs])
+        all_selected_songs.extend(unique_songs)
+    
+    # Apply track-level shuffling if needed
+    if shuffle_option == "Shuffle tracks":
+        random.shuffle(all_selected_songs)
+    
+    total_duration = sum(song["duration_ms"] for song in all_selected_songs)
+    return all_selected_songs, total_duration
+
+def handle_add_playlists(playlists, selected_playlist_blocks):
+    """
+    Handle the adding of playlists to selection
+    
+    Parameters:
+    playlists (List[Dict]): List of all playlists
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    """
+    display_playlist_selection_table(playlists, selected_playlist_blocks)
+    
+    selected_input = input(SELECT_IDS).strip()
+    if selected_input.lower() in ['b', 'back']:
+        return
+        
+    new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
+    
+    if new_block_indices:
+        validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
+
+def handle_remove_playlists(selected_playlist_blocks, playlists):
+    """
+    Handle the removal of playlists from selection
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
+    """
+    if not selected_playlist_blocks:
+        print("No playlists to remove.")
+        return
+        
+    display_selected_blocks(selected_playlist_blocks, playlists)
+    
+    try:
+        remove_blocks = input("Enter block numbers to remove (comma-separated): ").strip()
+        if not remove_blocks:
+            return
+            
+        remove_indices = [int(x.strip()) - 1 for x in remove_blocks.split(",") if x.strip()]
+        
+        # Sort indices in descending order to avoid index shifting during removal
+        remove_indices.sort(reverse=True)
+        
+        for idx in remove_indices:
+            if 0 <= idx < len(selected_playlist_blocks):
+                del selected_playlist_blocks[idx]
+            else:
+                print(f"Invalid block number: {idx+1}")
+        
+    except ValueError:
+        print("Invalid input. Please enter numeric block numbers.")
+
+def handle_shuffle_options():
+    """
+    Handle shuffle options selection
+    
+    Returns:
+    str: Selected shuffle option
+    """
+    shuffle_menu = {
+        "1": "Shuffle the order of selected playlists",
+        "2": "Shuffle all tracks",
+        "3": "No shuffle",
+    }
+    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
+    return {
+        "1": "Shuffle playlists",
+        "2": "Shuffle tracks",
+        "3": "No shuffle",
+    }[shuffle_choice]
+
+def handle_time_options():
+    """
+    Handle time options selection
+    
+    Returns:
+    Tuple[str, Optional[int], Optional[int]]: Time option description, time in milliseconds, 
+                                            and acceptable variation in milliseconds
+    """
+    time_menu = {
+        "1": "Set time for each playlist (the same for all playlists)",
+        "2": "Set total time (equally divided between all playlists)",
+        "3": "Not specified (use full playlists)",
+    }
+    time_choice = menu_navigation(time_menu, prompt="Select time option:")
+    
+    time_ms = None
+    variation_ms = None
+    time_option = "Not specified"
+    
+    if time_choice in ["1", "2"]:
+        time_str = safe_input(
+            "Insert a time (hh:mm:ss): ", 
+            validator=validate_time_format,
+            error_msg="Invalid time format. Please use HH:MM or HH:MM:SS format."
+        )
+        if time_str.lower() in ['b', 'back', 'c', 'cancel']:
+            return time_option, time_ms, variation_ms
+            
+        time_ms = parse_time_input(time_str)
+        if time_ms is None:
+            return time_option, time_ms, variation_ms
+        
+        variation_str = safe_input(
+            "Set the acceptable +- variation in minutes (e.g. 2): ",
+            validator=lambda x: x.isdigit() or x == "",
+            error_msg="Please enter a valid number of minutes."
+        )
+        if variation_str.lower() in ['b', 'back', 'c', 'cancel']:
+            return time_option, time_ms, variation_ms
+            
+        variation_ms = get_variation_input(variation_str)
+        if variation_ms is None:
+            return time_option, time_ms, variation_ms
+        
+        time_option = (f"Each playlist: {time_str} ± {variation_str} minutes"
+                      if time_choice == "1"
+                      else f"Total time: {time_str} ± {variation_str} minutes")
+                      
+    return time_option, time_ms, variation_ms
+
+def display_playlist_summary(playlist_name, privacy, block_count, shuffle_option, time_option):
+    """
+    Display a summary of the playlist configuration
+    
+    Parameters:
+    playlist_name (str): Playlist name
+    privacy (str): Privacy setting
+    block_count (int): Number of playlist blocks
+    shuffle_option (str): Selected shuffle option
+    time_option (str): Selected time option
+    """
+    print(f"\nPlaylist Configuration:")
+    print(f"Name: {playlist_name}")
+    print(f"Privacy: {privacy}")
+    print(f"Number of source playlist blocks: {block_count}")
+    print(f"Shuffle option: {shuffle_option}")
+    print(f"Time option: {time_option}")
+
+def create_playlist_on_spotify(
+    sp, 
+    selected_playlist_blocks, 
+    playlist_name, 
+    privacy, 
+    shuffle_option, 
+    time_ms, 
+    variation_ms,
+    playlists
+):
+    """
+    Create the playlist on Spotify with the selected configuration
+    
+    Parameters:
+    sp: Spotify client
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlist_name (str): Playlist name
+    privacy (str): Privacy setting
+    shuffle_option (str): Selected shuffle option
+    time_ms (Optional[int]): Selected time in milliseconds
+    variation_ms (Optional[int]): Acceptable time variation in milliseconds
+    playlists (List[Dict]): List of all playlists
+    """
+    try:
+        # Get all songs based on the selected shuffle strategy
+        all_selected_songs, total_duration = apply_shuffle_strategy(
+            selected_playlist_blocks, 
+            shuffle_option, 
+            sp, 
+            variation_ms
+        )
+        
+        if not all_selected_songs:
+            print("No songs selected. Playlist creation canceled.")
+            return
+        
+        # Create the playlist
+        new_playlist = sp.user_playlist_create(
+            sp.current_user()["id"],
+            playlist_name[:40],  # Truncate name if too long
+            public=(privacy == "public"),
+        )
+        
+        # Add tracks in batches of 100 (Spotify API limit)
+        track_uris = [song["uri"] for song in all_selected_songs]
+        for i in range(0, len(track_uris), 100):
+            sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
+
+        # Add the new playlist to the list
+        new_id = max([p.get("id", 0) for p in playlists], default=0) + 1
+        playlists.append({
+            "id": new_id,
+            "spotify_id": new_playlist["id"],
+            "user": sp.current_user()["display_name"],
+            "name": playlist_name[:40],
+            "track_count": len(all_selected_songs),
+            "duration_ms": total_duration,
+            "duration": format_duration(total_duration),
+        })
+        save_playlists_to_file(playlists)
+        
+        print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
+        
+    except Exception as e:
+        logger.error(f"Error creating playlist: {e}")
+        print(f"Error creating playlist: {e}")
+
+def handle_proceed_menu(
+    selected_playlist_blocks, 
+    playlist_name, 
+    privacy, 
+    shuffle_option, 
+    time_option,
+    sp,
+    playlists
+):
+    """
+    Handle the proceed menu and playlist creation
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlist_name (str): Playlist name
+    privacy (str): Privacy setting
+    shuffle_option (str): Selected shuffle option
+    time_option (str): Selected time option
+    sp: Spotify client
+    playlists (List[Dict]): List of all playlists
+    
+    Returns:
+    bool: True if canceled or playlist created successfully
+    """
+    time_ms = None
+    variation_ms = None
+    
+    while True:
+        proceed_menu = {
+            "1": "Shuffle options",
+            "2": "Time options",
+            "3": "Create playlist",
+            "b": "Back",
+            "c": "Cancel",
+        }
+        proceed_choice = menu_navigation(proceed_menu, prompt="Select an option:")
+
+        if proceed_choice == "1":
+            shuffle_option = handle_shuffle_options()
+
+        elif proceed_choice == "2":
+            time_option, time_ms, variation_ms = handle_time_options()
+
+        elif proceed_choice == "3":
+            display_playlist_summary(
+                playlist_name, 
+                privacy, 
+                len(selected_playlist_blocks), 
+                shuffle_option, 
+                time_option
+            )
+            
+            if input("\nCreate playlist? (y/n): ").lower() == "y":
+                create_playlist_on_spotify(
+                    sp, 
+                    selected_playlist_blocks, 
+                    playlist_name, 
+                    privacy, 
+                    shuffle_option, 
+                    time_ms, 
+                    variation_ms,
+                    playlists
+                )
+                return True
+                
+        elif proceed_choice in ["b", "c"]:
+            return proceed_choice == "c"  # Return True if canceled
 
 def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
-    """Handle the creation of a new playlist with advanced options."""
+    """
+    Handle the creation of a new playlist with advanced options.
+    
+    Parameters:
+    playlists (List[Dict]): List of all playlists
+    """
     # Ensure Spotify client is initialized before calling the client
     initialize_spotify_client()
     sp = get_spotify_client()
 
-    all_selected_songs = []
+    # Initialize variables
+    selected_playlist_blocks = []
     shuffle_option = "No shuffle"
     time_option = "Not specified"
-    
-    # Store selected playlists as blocks (can have the same playlist multiple times)
-    selected_playlist_blocks = []
-
-    # Get playlist details
-    playlist_name = input("Enter a name for the new playlist: ").strip()
-
-    # Privacy menu
-    privacy_menu = {
-        "1": "Public",
-        "2": "Private",
-    }
-    privacy_choice = menu_navigation(privacy_menu, prompt="Choose privacy:")
-    privacy = "public" if privacy_choice == "1" else "private"
-
-    # Display and select playlists with new format
-    display_playlist_selection_table(playlists, selected_playlist_blocks)
-
-    while True:
-        selected_input = input("Select playlist IDs (comma-separated) in the format 'ID-hh:mm' or 'ID': ").strip()
-        selected_playlists_with_time = parse_playlist_selection(selected_input)
-        
-        if selected_playlists_with_time:
-            for playlist_id, duration_seconds in selected_playlists_with_time:
-                playlist = next((p for p in playlists if p["id"] == playlist_id), None)
-                if playlist:
-                    selected_playlist_blocks.append({
-                        "playlist": playlist,
-                        "duration_seconds": duration_seconds
-                    })
-            
-            # Validate all blocks
-            validate_playlist_blocks(selected_playlist_blocks, playlists)
-            break
-        else:
-            print("No valid playlists selected. Please enter at least one valid playlist ID.")
-
     time_ms = None
     variation_ms = None
 
+    # Get basic playlist details
+    playlist_name = input("Enter a name for the new playlist: ").strip()
+    if not playlist_name:
+        print("Playlist name cannot be empty.")
+        return
+
+    # Privacy menu
+    privacy_menu = {"1": "Public", "2": "Private"}
+    privacy_choice = menu_navigation(privacy_menu, prompt="Choose privacy:")
+    privacy = "public" if privacy_choice == "1" else "private"
+
+    # Initial playlist selection
+    initial_selection_completed = False
+    while not initial_selection_completed:
+        display_playlist_selection_table(playlists, selected_playlist_blocks)
+        
+        selected_input = input(SELECT_IDS).strip()
+        if selected_input.lower() in ['b', 'back', 'c', 'cancel']:
+            return
+            
+        new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
+        
+        if new_block_indices:
+            validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
+            initial_selection_completed = True
+        else:
+            print("No valid playlists selected. Please enter at least one valid playlist ID.")
+
+    # Main menu loop
     while True:
-        # Main menu
         main_menu = {
-            "1": "Show selected blocks",  # Renamed from "Show selected playlists"
+            "1": "Show selected blocks", 
             "2": "Add playlists to selection",
             "3": "Remove playlists from selection",
             "4": "Proceed with current selection",
@@ -400,202 +869,242 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
         main_choice = menu_navigation(main_menu, prompt="Select an option:")
 
         if main_choice == "1":
-            # Display only the blocks table
             display_selected_blocks(selected_playlist_blocks, playlists)
 
         elif main_choice == "2":
-            # Display available playlists with usage info
-            display_playlist_selection_table(playlists, selected_playlist_blocks)
-            
-            # Use the same input format as initial selection
-            selected_input = input("Select playlist IDs (comma-separated) in the format 'ID-hh:mm' or 'ID': ").strip()
-            selected_playlists_with_time = parse_playlist_selection(selected_input)
-            
-            if selected_playlists_with_time:
-                # Add playlists to selection
-                for playlist_id, duration_seconds in selected_playlists_with_time:
-                    playlist = next((p for p in playlists if p["id"] == playlist_id), None)
-                    if playlist:
-                        selected_playlist_blocks.append({
-                            "playlist": playlist,
-                            "duration_seconds": duration_seconds
-                        })
-                
-                # Validate all blocks
-                validate_playlist_blocks(selected_playlist_blocks, playlists)
-            else:
-                print("No valid playlists selected.")
+            handle_add_playlists(playlists, selected_playlist_blocks)
 
         elif main_choice == "3":
-            if selected_playlist_blocks:
-                # Display blocks with index numbers
-                display_selected_blocks(selected_playlist_blocks, playlists)
-                
-                try:
-                    remove_blocks = input("Enter block numbers to remove (comma-separated): ").strip()
-                    remove_indices = [int(x.strip()) - 1 for x in remove_blocks.split(",") if x.strip()]
-                    
-                    # Sort indices in descending order to avoid index shifting during removal
-                    remove_indices.sort(reverse=True)
-                    
-                    for idx in remove_indices:
-                        if 0 <= idx < len(selected_playlist_blocks):
-                            del selected_playlist_blocks[idx]
-                        else:
-                            print(f"Invalid block number: {idx+1}")
-                    
-                except ValueError:
-                    print("Invalid input. Please enter numeric block numbers.")
-            else:
-                print("No playlists to remove.")
+            handle_remove_playlists(selected_playlist_blocks, playlists)
 
         elif main_choice == "4":
-            while True:
-                # Submenu for proceeding
-                proceed_menu = {
-                    "1": "Shuffle options",
-                    "2": "Time options",
-                    "3": "Create playlist",
-                    "b": "Back",
-                    "c": "Cancel",
-                }
-                proceed_choice = menu_navigation(proceed_menu, prompt="Select an option:")
-
-                if proceed_choice == "1":
-                    shuffle_menu = {
-                        "1": "Shuffle the order of selected playlists",
-                        "2": "Shuffle all tracks",
-                        "3": "No shuffle",
-                    }
-                    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
-                    shuffle_option = {
-                        "1": "Shuffle playlists",
-                        "2": "Shuffle tracks",
-                        "3": "No shuffle",
-                    }[shuffle_choice]
-
-                elif proceed_choice == "2":
-                    time_menu = {
-                        "1": "Set time for each playlist (the same for all playlists)",
-                        "2": "Set total time (equally divided between all playlists)",
-                        "3": "Not specified (use full playlists)",
-                    }
-                    time_choice = menu_navigation(time_menu, prompt="Select time option:")
-
-                    if time_choice in ["1", "2"]:
-                        time_str = input("Insert a time (hh:mm:ss): ").strip()
-                        time_ms = parse_time_input(time_str)
-                        if time_ms is None:
-                            continue
-
-                        variation_str = input("Set the acceptable +- variation in minutes (e.g. 2): ").strip()
-                        variation_ms = get_variation_input(variation_str)
-                        if variation_ms is None:
-                            continue
-
-                        time_option = (f"Each playlist: {time_str} ± {variation_str} minutes"
-                                       if time_choice == "1"
-                                       else f"Total time: {time_str} ± {variation_str} minutes")
-                    elif time_choice == "3":
-                        time_ms = None
-                        variation_ms = None
-                        time_option = "Not specified"
-
-                elif proceed_choice == "3":
-                    print(f"\nPlaylist Configuration:")
-                    print(f"Name: {playlist_name}")
-                    print(f"Privacy: {privacy}")
-                    print(f"Number of source playlist blocks: {len(selected_playlist_blocks)}")
-                    print(f"Shuffle option: {shuffle_option}")
-                    print(f"Time option: {time_option}")
-
-                    if input("\nCreate playlist? (y/n): ").lower() == "y":
-                        # Track which tracks have been used from each playlist to avoid duplicates
-                        used_track_uris = set()
-                        all_selected_songs = []
-                        total_duration = 0
-                        
-                        for block in selected_playlist_blocks:
-                            playlist = block["playlist"]
-                            duration_seconds = block.get("duration_seconds")
-                            
-                            playlist_songs, duration = get_songs_from_playlist(
-                                sp,
-                                playlist["spotify_id"],
-                                duration_seconds,
-                                variation_ms,
-                            )
-                            
-                            # Filter out already used tracks
-                            unique_songs = [song for song in playlist_songs 
-                                          if song["uri"] not in used_track_uris]
-                            
-                            # Add these track URIs to the used set
-                            used_track_uris.update([song["uri"] for song in unique_songs])
-                            
-                            all_selected_songs.extend(unique_songs)
-                            total_duration += sum(song["duration_ms"] for song in unique_songs)
-
-                        if shuffle_option == "Shuffle tracks":
-                            random.shuffle(all_selected_songs)
-                        elif shuffle_option == "Shuffle playlists":
-                            random.shuffle(selected_playlist_blocks)
-                            used_track_uris = set()
-                            all_selected_songs = []
-                            total_duration = 0
-                            
-                            for block in selected_playlist_blocks:
-                                playlist = block["playlist"]
-                                duration_seconds = block.get("duration_seconds")
-                                
-                                playlist_songs, duration = get_songs_from_playlist(
-                                    sp,
-                                    playlist["spotify_id"],
-                                    duration_seconds,
-                                    variation_ms,
-                                )
-                                
-                                # Filter out already used tracks
-                                unique_songs = [song for song in playlist_songs 
-                                              if song["uri"] not in used_track_uris]
-                                
-                                # Add these track URIs to the used set
-                                used_track_uris.update([song["uri"] for song in unique_songs])
-                                
-                                all_selected_songs.extend(unique_songs)
-                                total_duration += sum(song["duration_ms"] for song in unique_songs)
-                                
-                        try:
-                            new_playlist = sp.user_playlist_create(
-                                sp.current_user()["id"],
-                                playlist_name[:40],  # Truncate name if too long
-                                public=(privacy == "public"),
-                            )
-                            track_uris = [song["uri"] for song in all_selected_songs]
-                            for i in range(0, len(track_uris), 100):
-                                sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
-
-                            # Assign a new ID to the playlist
-                            new_id = max([p.get("id", 0) for p in playlists], default=0) + 1  # Get the next available ID
-                            playlists.append({
-                                "id": new_id,
-                                "spotify_id": new_playlist["id"],
-                                "user": sp.current_user()["display_name"],
-                                "name": playlist_name[:40],
-                                "track_count": len(all_selected_songs),
-                                "duration_ms": total_duration,
-                                "duration": format_duration(total_duration),
-                            })
-                            save_playlists_to_file(playlists)
-                            
-                            print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} songs.")
-                            return
-                        except Exception as e:
-                            logger.error(f"Error creating playlist: {e}")
-                            return
-
-                elif proceed_choice in ["b", "c"]:
-                    break
+            if handle_proceed_menu(
+                selected_playlist_blocks, 
+                playlist_name, 
+                privacy, 
+                shuffle_option, 
+                time_option,
+                sp,
+                playlists
+            ):
+                return  # Playlist creation was successful or user canceled
 
         elif main_choice in ["b", "c"]:
             return
+
+def handle_add_playlists(playlists, selected_playlist_blocks):
+    """Handle the adding of playlists to selection"""
+    display_playlist_selection_table(playlists, selected_playlist_blocks)
+    
+    selected_input = input(SELECT_IDS).strip()
+    if selected_input.lower() in ['b', 'back']:
+        return
+        
+    new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
+    
+    if new_block_indices:
+        validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
+
+def handle_remove_playlists(selected_playlist_blocks, playlists):
+    """Handle the removal of playlists from selection"""
+    if not selected_playlist_blocks:
+        print("No playlists to remove.")
+        return
+        
+    display_selected_blocks(selected_playlist_blocks, playlists)
+    
+    try:
+        remove_blocks = input("Enter block numbers to remove (comma-separated): ").strip()
+        if not remove_blocks:
+            return
+            
+        remove_indices = [int(x.strip()) - 1 for x in remove_blocks.split(",") if x.strip()]
+        
+        # Sort indices in descending order to avoid index shifting during removal
+        remove_indices.sort(reverse=True)
+        
+        for idx in remove_indices:
+            if 0 <= idx < len(selected_playlist_blocks):
+                del selected_playlist_blocks[idx]
+            else:
+                print(f"Invalid block number: {idx+1}")
+        
+    except ValueError:
+        print("Invalid input. Please enter numeric block numbers.")
+
+def handle_proceed_menu(
+    selected_playlist_blocks, 
+    playlist_name, 
+    privacy, 
+    shuffle_option, 
+    time_option,
+    sp,
+    playlists
+):
+    """Handle the proceed menu and playlist creation"""
+    time_ms = None
+    variation_ms = None
+    
+    while True:
+        proceed_menu = {
+            "1": "Shuffle options",
+            "2": "Time options",
+            "3": "Create playlist",
+            "b": "Back",
+            "c": "Cancel",
+        }
+        proceed_choice = menu_navigation(proceed_menu, prompt="Select an option:")
+
+        if proceed_choice == "1":
+            shuffle_option = handle_shuffle_options()
+
+        elif proceed_choice == "2":
+            time_option, time_ms, variation_ms = handle_time_options()
+
+        elif proceed_choice == "3":
+            display_playlist_summary(playlist_name, privacy, len(selected_playlist_blocks), 
+                                    shuffle_option, time_option)
+            
+            if input("\nCreate playlist? (y/n): ").lower() == "y":
+                create_playlist_on_spotify(
+                    sp, 
+                    selected_playlist_blocks, 
+                    playlist_name, 
+                    privacy, 
+                    shuffle_option, 
+                    time_ms, 
+                    variation_ms,
+                    playlists
+                )
+                return True
+                
+        elif proceed_choice in ["b", "c"]:
+            return proceed_choice == "c"  # Return True if canceled
+
+def handle_shuffle_options():
+    """Handle shuffle options selection"""
+    shuffle_menu = {
+        "1": "Shuffle the order of selected playlists",
+        "2": "Shuffle all tracks",
+        "3": "No shuffle",
+    }
+    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
+    return {
+        "1": "Shuffle playlists",
+        "2": "Shuffle tracks",
+        "3": "No shuffle",
+    }[shuffle_choice]
+
+def handle_time_options():
+    """Handle time options selection"""
+    time_menu = {
+        "1": "Set time for each playlist (the same for all playlists)",
+        "2": "Set total time (equally divided between all playlists)",
+        "3": "Not specified (use full playlists)",
+    }
+    time_choice = menu_navigation(time_menu, prompt="Select time option:")
+    
+    time_ms = None
+    variation_ms = None
+    time_option = "Not specified"
+    
+    if time_choice in ["1", "2"]:
+        time_str = safe_input(
+            "Insert a time (hh:mm:ss): ", 
+            validator=validate_time_format,
+            error_msg="Invalid time format. Please use HH:MM or HH:MM:SS format."
+        )
+        if time_str.lower() in ['b', 'back', 'c', 'cancel']:
+            return time_option, time_ms, variation_ms
+            
+        time_ms = parse_time_input(time_str)
+        if time_ms is None:
+            return time_option, time_ms, variation_ms
+        
+        variation_str = safe_input(
+            "Set the acceptable +- variation in minutes (e.g. 2): ",
+            validator=lambda x: x.isdigit() or x == "",
+            error_msg="Please enter a valid number of minutes."
+        )
+        if variation_str.lower() in ['b', 'back', 'c', 'cancel']:
+            return time_option, time_ms, variation_ms
+            
+        variation_ms = get_variation_input(variation_str)
+        if variation_ms is None:
+            return time_option, time_ms, variation_ms
+        
+        time_option = (f"Each playlist: {time_str} ± {variation_str} minutes"
+                      if time_choice == "1"
+                      else f"Total time: {time_str} ± {variation_str} minutes")
+                      
+    return time_option, time_ms, variation_ms
+
+def display_playlist_summary(playlist_name, privacy, block_count, shuffle_option, time_option):
+    """Display a summary of the playlist configuration"""
+    print(f"\nPlaylist Configuration:")
+    print(f"Name: {playlist_name}")
+    print(f"Privacy: {privacy}")
+    print(f"Number of source playlist blocks: {block_count}")
+    print(f"Shuffle option: {shuffle_option}")
+    print(f"Time option: {time_option}")
+
+def create_playlist_on_spotify(
+    sp, 
+    selected_playlist_blocks, 
+    playlist_name, 
+    privacy, 
+    shuffle_option, 
+    time_ms, 
+    variation_ms,
+    playlists
+):
+    """Create the playlist on Spotify with the selected configuration"""
+    try:
+        # Get all songs based on the selected shuffle strategy
+        all_selected_songs, total_duration = apply_shuffle_strategy(
+            selected_playlist_blocks, 
+            shuffle_option, 
+            sp, 
+            variation_ms
+        )
+        
+        if not all_selected_songs:
+            print("No songs selected. Playlist creation canceled.")
+            return
+        
+        # Create the playlist
+        new_playlist = sp.user_playlist_create(
+            sp.current_user()["id"],
+            playlist_name[:40],  # Truncate name if too long
+            public=(privacy == "public"),
+        )
+        
+        # Add tracks in batches of 100 (Spotify API limit)
+        track_uris = [song["uri"] for song in all_selected_songs]
+        for i in range(0, len(track_uris), 100):
+            sp.playlist_add_items(new_playlist["id"], track_uris[i:i + 100])
+
+        # Add the new playlist to the list
+        new_id = max([p.get("id", 0) for p in playlists], default=0) + 1
+        playlists.append({
+            "id": new_id,
+            "spotify_id": new_playlist["id"],
+            "user": sp.current_user()["display_name"],
+            "name": playlist_name[:40],
+            "track_count": len(all_selected_songs),
+            "duration_ms": total_duration,
+            "duration": format_duration(total_duration),
+        })
+        save_playlists_to_file(playlists)
+        
+        # Convert total_duration from milliseconds to seconds
+        total_duration_seconds = total_duration // 1000
+        # Format the duration as HH:MM:SS
+        hours, remainder = divmod(total_duration_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        duration_str = f"{hours:02}:{minutes:02}:{seconds:02}"
+
+        print(f"\nSuccess! Created playlist '{playlist_name}' with {len(all_selected_songs)} tracks and {duration_str} of playback time.")
+    except Exception as e:
+        logger.error(f"Error creating playlist: {e}")
+        print(f"Error creating playlist: {e}")
