@@ -597,6 +597,7 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
         display_selected_blocks(selected_playlist_blocks, playlists)
         
         # Prompt for block number
+        print()
         block_input = input("Select a block number (or 'b' to go back): ").strip()
         if block_input.lower() in ['b', 'back']:
             break  # Exit the editing loop
@@ -612,27 +613,39 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
                 temp_blocks.pop(block_index)
                 available_seconds = calculate_available_time(playlist_id, temp_blocks, playlists)
                 
-                # Prompt for new time
-                time_prompt = f"Select a time in the format HH:MM up to {format_duration_hhmm(available_seconds)}: "
-                time_str = input(time_prompt).strip()
-                
-                # Validate time format and amount
-                if validate_time_format(time_str):
-                    parts = time_str.split(':')
-                    if len(parts) == 2:
-                        hours, minutes = map(int, parts)
-                        new_duration_seconds = (hours * 3600) + (minutes * 60)
-                        
-                        if new_duration_seconds <= available_seconds:
-                            # Update the block duration
-                            selected_playlist_blocks[block_index]["duration_seconds"] = new_duration_seconds
-                            print("Done!")
+                # Loop for time input
+                while True:
+                    time_prompt = f"Select a time in the format HH:MM up to {format_duration_hhmm(available_seconds)} (or 'b' to go back): "
+                    time_str = input(time_prompt).strip()
+                    
+                    # Check if the user wants to go back
+                    if time_str.lower() in ['b', 'back']:
+                        break  # Exit the time input loop and go back to block selection
+                    
+                    # Validate time format
+                    if not validate_time_format(time_str):
+                        print("Invalid time format. Please use HH:MM.")
+                        continue  # Restart the loop
+                    
+                    # Parse time
+                    try:
+                        parts = time_str.split(':')
+                        if len(parts) == 2:
+                            hours, minutes = map(int, parts)
+                            new_duration_seconds = (hours * 3600) + (minutes * 60)
+                            
+                            # Validate time amount
+                            if new_duration_seconds <= available_seconds:
+                                # Update the block duration
+                                selected_playlist_blocks[block_index]["duration_seconds"] = new_duration_seconds
+                                print("Done!")
+                                break  # Exit the time input loop
+                            else:
+                                print(f"Invalid time.")
                         else:
-                            print(f"Time exceeds available time. Maximum is {format_duration_hhmm(available_seconds)}.")
-                    else:
-                        print("Invalid time format. Expected HH:MM.")
-                else:
-                    print("Invalid time format. Please use HH:MM.")
+                            print("Invalid time format. Expected HH:MM.")
+                    except ValueError:
+                        print("Invalid time format. Please enter numbers for hours and minutes.")
             else:
                 print(f"Invalid block number: {block_input}")
         except ValueError:
@@ -693,7 +706,7 @@ def handle_time_options():
         time_str = safe_input(
             "Insert a time (hh:mm:ss): ", 
             validator=validate_time_format,
-            error_msg="Invalid time format. Please use HH:MM or HH:MM:SS format."
+            error_msg="Invalid time format."
         )
         if time_str.lower() in ['b', 'back', 'c', 'cancel']:
             return time_option, time_ms, variation_ms
