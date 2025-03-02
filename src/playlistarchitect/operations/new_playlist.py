@@ -10,6 +10,7 @@ from playlistarchitect.utils.new_playlist_helpers import (
     handle_add_playlists,
     handle_remove_playlists,    
     handle_proceed_menu,
+    handle_edit_blocks,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,9 +65,10 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
     while True:
         main_menu = {
             "1": "Show selected blocks", 
-            "2": "Add playlists to selection",
-            "3": "Remove playlists from selection",
-            "4": "Proceed with current selection",
+            "2": "Add blocks to selection",
+            "3": "Remove blocks from selection",
+            "4": "Edit selected blocks",
+            "5": "Proceed with current selection",
             "b": "Back",
             "c": "Cancel",
         }
@@ -81,7 +83,10 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
         elif main_choice == "3":
             handle_remove_playlists(selected_playlist_blocks, playlists)
 
-        elif main_choice == "4":
+        elif main_choice == "4":  # New option
+            handle_edit_blocks(selected_playlist_blocks, playlists)
+
+        elif main_choice == "5":  # Updated option
             if handle_proceed_menu(
                 selected_playlist_blocks, 
                 playlist_name, 

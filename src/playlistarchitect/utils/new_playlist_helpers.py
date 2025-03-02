@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Tuple, Any, Callable
 from tabulate import tabulate
 from playlistarchitect.utils.helpers import parse_time_input, get_variation_input
 from playlistarchitect.utils.formatting_helpers import format_duration
+from playlistarchitect.utils.helpers import menu_navigation
 
 logger = logging.getLogger(__name__)
 
@@ -583,6 +584,70 @@ def handle_remove_playlists(selected_playlist_blocks, playlists):
     except ValueError:
         print("Invalid input. Please enter numeric block numbers.")
 
+def handle_edit_blocks(selected_playlist_blocks, playlists):
+    """
+    Handle the editing of selected playlist blocks.
+    
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
+    """
+    while True:
+        # Display current selection
+        display_selected_blocks(selected_playlist_blocks, playlists)
+        
+        # Prompt for block number
+        block_input = input("Select a block number (or 'b' to go back): ").strip()
+        if block_input.lower() in ['b', 'back']:
+            break  # Exit the editing loop
+        
+        try:
+            block_index = int(block_input) - 1  # Convert to 0-based index
+            if 0 <= block_index < len(selected_playlist_blocks):
+                block = selected_playlist_blocks[block_index]
+                playlist_id = block["playlist"]["id"]
+                
+                # Calculate available time for this block
+                temp_blocks = selected_playlist_blocks.copy()
+                temp_blocks.pop(block_index)
+                available_seconds = calculate_available_time(playlist_id, temp_blocks, playlists)
+                
+                # Prompt for new time
+                time_prompt = f"Select a time in the format HH:MM up to {format_duration_hhmm(available_seconds)}: "
+                time_str = input(time_prompt).strip()
+                
+                # Validate time format and amount
+                if validate_time_format(time_str):
+                    parts = time_str.split(':')
+                    if len(parts) == 2:
+                        hours, minutes = map(int, parts)
+                        new_duration_seconds = (hours * 3600) + (minutes * 60)
+                        
+                        if new_duration_seconds <= available_seconds:
+                            # Update the block duration
+                            selected_playlist_blocks[block_index]["duration_seconds"] = new_duration_seconds
+                            print("Done!")
+                        else:
+                            print(f"Time exceeds available time. Maximum is {format_duration_hhmm(available_seconds)}.")
+                    else:
+                        print("Invalid time format. Expected HH:MM.")
+                else:
+                    print("Invalid time format. Please use HH:MM.")
+            else:
+                print(f"Invalid block number: {block_input}")
+        except ValueError:
+            print("Invalid input. Please enter a valid block number.")
+        
+        # Prompt for next action
+        edit_menu = {
+            "1": "Edit a block",
+            "b": "Go back",
+        }
+        edit_choice = menu_navigation(edit_menu, prompt="Select an option:")
+        
+        if edit_choice == "b":
+            break  # Exit the editing loop
+
 def handle_shuffle_options():
     """
     Handle shuffle options selection
@@ -590,7 +655,6 @@ def handle_shuffle_options():
     Returns:
     str: Selected shuffle option
     """
-    from playlistarchitect.utils.helpers import menu_navigation
     
     shuffle_menu = {
         "1": "Shuffle the order of selected playlists",
