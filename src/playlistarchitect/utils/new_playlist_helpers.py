@@ -63,48 +63,58 @@ def validate_time_format(time_str):
     except ValueError:
         return False
 
-def parse_playlist_selection(input_str):
+def parse_playlist_selection(input_str, playlists):
     """
     Parse the input string in the format 'ID-hh:mm' or 'ID'.
-    Returns a list of tuples (playlist_id, duration_seconds).
-    For plain IDs, duration_seconds will be None, indicating to use available time.
+    Returns a list of tuples (playlist_id, duration_seconds) and a list of invalid IDs.
     
     Parameters:
     input_str (str): Comma-separated string of playlist IDs with optional durations
+    playlists (List[Dict]): List of all playlists
     
     Returns:
-    List[Tuple[int, Optional[int]]]: List of (playlist_id, duration_seconds) tuples
+    Tuple[List[Tuple[int, Optional[int]]], List[int]]: List of (playlist_id, duration_seconds) tuples and list of invalid IDs
     """
     selected_playlists = []
+    invalid_ids = []
+    
     for item in input_str.split(','):
         item = item.strip()
+        if not item:
+            continue  # Skip empty entries
+        
         if '-' in item:
-            playlist_id, time_str = item.split('-')
-            try:
-                playlist_id = int(playlist_id.strip())
+            playlist_id_str, time_str = item.split('-')
+        else:
+            playlist_id_str, time_str = item, None
+        
+        try:
+            playlist_id = int(playlist_id_str.strip())
+            # Check if the playlist ID exists in the playlists
+            if not any(p["id"] == playlist_id for p in playlists):
+                invalid_ids.append(playlist_id)
+                continue
+            
+            # Parse time if provided
+            duration_seconds = None
+            if time_str:
                 if ':' in time_str:
-                    # Check if time_str contains hours and minutes
                     parts = time_str.strip().split(':')
                     if len(parts) == 2:
                         hours, minutes = map(int, parts)
-                        duration_seconds = (hours * 3600) + (minutes * 60)  # Convert to seconds
+                        duration_seconds = (hours * 3600) + (minutes * 60)
                     else:
                         print(f"Invalid time format for '{item}'. Expected hh:mm. Skipping.")
                         continue
                 else:
                     print(f"Invalid time format for '{item}'. Expected hh:mm. Skipping.")
                     continue
-                selected_playlists.append((playlist_id, duration_seconds))
-            except ValueError:
-                print(f"Invalid format for '{item}'. Skipping.")
-        else:
-            try:
-                playlist_id = int(item.strip())
-                # When just ID is provided, return None to indicate "use available time"
-                selected_playlists.append((playlist_id, None))
-            except ValueError:
-                print(f"Invalid playlist ID '{item}'. Skipping.")
-    return selected_playlists
+            
+            selected_playlists.append((playlist_id, duration_seconds))
+        except ValueError:
+            invalid_ids.append(playlist_id_str)
+    
+    return selected_playlists, invalid_ids
 
 def get_songs_from_playlist(
     sp,
@@ -177,6 +187,28 @@ def get_songs_from_playlist(
 
     return selected_songs, current_duration
 
+def calculate_and_display_blocks_totals(selected_blocks):
+    """
+    Calculate and display the total number of blocks and total playtime.
+    Handles singular and plural cases for the number of blocks.
+    
+    Parameters:
+    selected_blocks (List[Dict]): List of selected playlist blocks
+    """
+    # Calculate total selected blocks and total playtime
+    total_blocks = len(selected_blocks)
+    total_playtime_seconds = sum(
+        block.get("duration_seconds", 0) or 0  # Handle None case
+        for block in selected_blocks
+    )
+    total_playtime_str = format_duration_hhmm(total_playtime_seconds)
+
+    # Handle singular/plural for blocks
+    if total_blocks == 1:
+        print(f"Total selected: {total_blocks} block, {total_playtime_str} playback time.")
+    else:
+        print(f"Total selected: {total_blocks} blocks, {total_playtime_str} playback time.")
+        
 def calculate_available_time(playlist_id, selected_playlist_blocks, playlists):
     """
     Calculate available time for a playlist based on current selections
@@ -220,7 +252,7 @@ def process_playlist_selection(selected_input, playlists, selected_playlist_bloc
     List[int]: Indices of newly added blocks
     """
     start_block_index = len(selected_playlist_blocks)
-    selected_playlists_with_time = parse_playlist_selection(selected_input)
+    selected_playlists_with_time, invalid_ids = parse_playlist_selection(selected_input, playlists)  # Fixed: Added playlists argument
     
     if not selected_playlists_with_time:
         print("No valid playlists selected.")
@@ -291,6 +323,10 @@ def display_selected_blocks(selected_playlist_blocks, playlists):
         tablefmt="simple"
     ))
 
+    # Display totals using the reusable function
+    print()
+    calculate_and_display_blocks_totals(selected_playlist_blocks)
+    
 def validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices=None):
     """
     Validate if selected block times exceed available times and
@@ -484,6 +520,9 @@ def display_playlist_selection_table(playlists, selected_blocks):
     
     print(f"\n{total_playlists} playlists, {total_tracks} tracks, {total_duration_str} playback time.")
 
+    # Display totals using the reusable function
+    calculate_and_display_blocks_totals(selected_blocks)
+    
 def apply_shuffle_strategy(selected_playlist_blocks, shuffle_option, sp, variation_ms):
     """
     Applies the selected shuffle strategy and returns the songs list
@@ -553,7 +592,7 @@ def handle_add_playlists(playlists, selected_playlist_blocks):
 
 def handle_remove_playlists(selected_playlist_blocks, playlists):
     """
-    Handle the removal of playlists from selection
+    Handle the removal of playlists from selection.
     
     Parameters:
     selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
@@ -563,27 +602,47 @@ def handle_remove_playlists(selected_playlist_blocks, playlists):
         print("No playlists to remove.")
         return
         
+    # Display the block table only once at the start
     display_selected_blocks(selected_playlist_blocks, playlists)
     
-    try:
-        remove_blocks = input("Enter block numbers to remove (comma-separated): ").strip()
-        if not remove_blocks:
-            return
+    while True:  # Loop to reprompt if there are invalid block numbers
+        remove_blocks = input("Enter block numbers to remove (comma-separated) or 'b' to go back: ").strip()
+        
+        # Handle "b" or "back" to go back
+        if remove_blocks.lower() in ['b', 'back']:
+            return  # Exit the function and go back to the previous menu
             
-        remove_indices = [int(x.strip()) - 1 for x in remove_blocks.split(",") if x.strip()]
-        
-        # Sort indices in descending order to avoid index shifting during removal
-        remove_indices.sort(reverse=True)
-        
-        for idx in remove_indices:
-            if 0 <= idx < len(selected_playlist_blocks):
+        if not remove_blocks:
+            continue  # Reprompt if no input is provided
+            
+        try:
+            # Parse input into block indices
+            remove_indices = [int(x.strip()) - 1 for x in remove_blocks.split(",") if x.strip()]
+            
+            # Validate block indices
+            invalid_indices = [
+                idx + 1 for idx in remove_indices
+                if idx < 0 or idx >= len(selected_playlist_blocks)
+            ]
+            
+            if invalid_indices:
+                # Display all invalid block numbers in a single line
+                print(f"Invalid block numbers: {', '.join(map(str, invalid_indices))}")
+                continue  # Reprompt for input without re-displaying the table
+            
+            # Sort indices in descending order to avoid index shifting during removal
+            remove_indices.sort(reverse=True)
+            
+            # Remove valid blocks
+            for idx in remove_indices:
                 del selected_playlist_blocks[idx]
-            else:
-                print(f"Invalid block number: {idx+1}")
-        
-    except ValueError:
-        print("Invalid input. Please enter numeric block numbers.")
-
+            
+            print("Blocks removed successfully.")
+            break  # Exit the loop after successful removal
+            
+        except ValueError:
+            print("Invalid input. Integers values are expected.")
+                                    
 def handle_edit_blocks(selected_playlist_blocks, playlists):
     """
     Handle the editing of selected playlist blocks.

@@ -11,6 +11,7 @@ from playlistarchitect.utils.new_playlist_helpers import (
     handle_remove_playlists,    
     handle_proceed_menu,
     handle_edit_blocks,
+    parse_playlist_selection,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,6 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
     selected_playlist_blocks = []
     shuffle_option = "No shuffle"
     time_option = "Not specified"
-    time_ms = None
-    variation_ms = None
 
     # Get basic playlist details
     playlist_name = input("Enter a name for the new playlist: ").strip()
@@ -45,22 +44,9 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
     privacy = "public" if privacy_choice == "1" else "private"
 
     # Initial playlist selection
-    initial_selection_completed = False
-    while not initial_selection_completed:
-        display_playlist_selection_table(playlists, selected_playlist_blocks)
-        
-        selected_input = input("Set the comma-separated track blocks in the format 'ID' (to use all the available time) or 'ID-HH:MM' (to use a custom time). 'b' to go back.\n> ").strip()
-        if selected_input.lower() in ['b', 'back', 'c', 'cancel']:
-            return
-            
-        new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
-        
-        if new_block_indices:
-            validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
-            initial_selection_completed = True
-        else:
-            print("No valid playlists selected. Please enter at least one valid playlist ID.")
-
+    while not selected_playlist_blocks:
+        handle_add_playlists(playlists, selected_playlist_blocks)
+    
     # Main menu loop
     while True:
         main_menu = {
