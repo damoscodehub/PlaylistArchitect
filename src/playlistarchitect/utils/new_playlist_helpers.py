@@ -67,11 +67,11 @@ def parse_playlist_selection(input_str, playlists):
     """
     Parse the input string in the format 'ID-hh:mm' or 'ID'.
     Returns a list of tuples (playlist_id, duration_seconds) and a list of invalid IDs.
-    
+
     Parameters:
     input_str (str): Comma-separated string of playlist IDs with optional durations
     playlists (List[Dict]): List of all playlists
-    
+
     Returns:
     Tuple[List[Tuple[int, Optional[int]]], List[int]]: List of (playlist_id, duration_seconds) tuples and list of invalid IDs
     """
@@ -571,24 +571,43 @@ def apply_shuffle_strategy(selected_playlist_blocks, shuffle_option, sp, variati
     total_duration = sum(song["duration_ms"] for song in all_selected_songs)
     return all_selected_songs, total_duration
 
-def handle_add_playlists(playlists, selected_playlist_blocks):
+def handle_add_playlists(playlists, selected_playlist_blocks, is_initial_selection=False):
     """
-    Handle the adding of playlists to selection
-    
+    Handle the adding of playlists to selection.
+
     Parameters:
     playlists (List[Dict]): List of all playlists
     selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    is_initial_selection (bool): Whether this is the initial selection
+
+    Returns:
+    bool: True if playlists were added, False if the user went back
     """
-    display_playlist_selection_table(playlists, selected_playlist_blocks)
-    
-    selected_input = input(SELECT_IDS).strip()
-    if selected_input.lower() in ['b', 'back']:
-        return
+    while True:
+        display_playlist_selection_table(playlists, selected_playlist_blocks)
         
-    new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
-    
-    if new_block_indices:
-        validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
+        selected_input = input(SELECT_IDS).strip()
+        if selected_input.lower() in ['b', 'back']:
+            return False  # Signal that the user wants to go back
+        
+        try:
+            # Parse the input and validate IDs
+            selected_playlists_with_time, invalid_ids = parse_playlist_selection(selected_input, playlists)
+            
+            if not selected_playlists_with_time:
+                print("No valid IDs entered.")
+                continue  # Reprompt for input
+            
+            if invalid_ids:
+                print(f"Invalid ID(s) ignored: {', '.join(map(str, invalid_ids))}")
+            
+            new_block_indices = process_playlist_selection(selected_input, playlists, selected_playlist_blocks)
+            
+            if new_block_indices:
+                validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indices)
+                return True  # Signal that playlists were added
+        except ValueError:
+            print("Invalid input format. Only positive integers values are expected.")
 
 def handle_remove_playlists(selected_playlist_blocks, playlists):
     """
@@ -642,6 +661,110 @@ def handle_remove_playlists(selected_playlist_blocks, playlists):
             
         except ValueError:
             print("Invalid input. Integers values are expected.")
+
+def handle_reorder_blocks(selected_playlist_blocks, playlists):
+    """
+    Handle the reordering of selected playlist blocks.
+
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+    playlists (List[Dict]): List of all playlists
+
+    Returns:
+    bool: True if blocks were reordered, False if the user canceled or went back
+    """
+    # Check if there are enough blocks to reorder
+    if len(selected_playlist_blocks) < 2:
+        print("There is only one block. If I could rearrange it I would have already conquered the multiverse.")
+        return False
+
+    # Display current blocks
+    display_selected_blocks(selected_playlist_blocks, playlists)
+    print()
+
+    # Prompt for the block to reorder
+    while True:
+        block_input = input("Enter a block number to reorder: ").strip().lower()
+        
+        # Handle "back" or "cancel"
+        if block_input in ['b', 'back']:
+            return False
+        if block_input in ['c', 'cancel', 'main', 'main menu']:
+            return True  # Signal to cancel the whole process
+
+        # Validate block number
+        try:
+            block_index = int(block_input) - 1  # Convert to 0-based index
+            if 0 <= block_index < len(selected_playlist_blocks):
+                break
+            else:
+                print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
+        except ValueError:
+            print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
+
+    # Prompt for the new position
+    while True:
+        new_position_input = input(f"Enter a new block number for block {block_index + 1}: ").strip().lower()
+        
+        # Handle "back" or "cancel"
+        if new_position_input in ['b', 'back']:
+            return False
+        if new_position_input in ['c', 'cancel', 'main', 'main menu']:
+            return True  # Signal to cancel the whole process
+
+        # Validate new position
+        try:
+            new_position = int(new_position_input) - 1  # Convert to 0-based index
+            if 0 <= new_position < len(selected_playlist_blocks):
+                if new_position == block_index:
+                    print("The number entered is the same as the selected block. Enter a different one.")
+                    continue
+                break
+            else:
+                print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
+        except ValueError:
+            print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
+
+    # Handle reordering
+    if abs(new_position - block_index) == 1:
+        # Swap adjacent blocks
+        selected_playlist_blocks[block_index], selected_playlist_blocks[new_position] = (
+            selected_playlist_blocks[new_position], selected_playlist_blocks[block_index]
+        )
+        print("Done!")
+    else:
+        # Prompt for swap or push
+        while True:
+            option_input = input(
+                "1. Swap those two blocks\n"
+                "2. Push needed blocks\n"
+                "Select an option: "
+            ).strip().lower()
+
+            # Handle "back" or "cancel"
+            if option_input in ['b', 'back']:
+                return False
+            if option_input in ['c', 'cancel', 'main', 'main menu']:
+                return True  # Signal to cancel the whole process
+
+            # Validate option
+            if option_input == "1":
+                # Swap the two blocks
+                selected_playlist_blocks[block_index], selected_playlist_blocks[new_position] = (
+                    selected_playlist_blocks[new_position], selected_playlist_blocks[block_index]
+                )
+                print("Done!")
+                break
+            elif option_input == "2":
+                # Push blocks
+                block_to_move = selected_playlist_blocks.pop(block_index)
+                selected_playlist_blocks.insert(new_position, block_to_move)
+                print("Done!")
+                break
+            else:
+                print("Invalid option. Select 1 or 2:")
+
+    return False  # Signal that reordering was successful
                                     
 def handle_edit_blocks(selected_playlist_blocks, playlists):
     """
