@@ -131,45 +131,52 @@ def export_playlists(playlists, selected_ids=None):
 
     # Only proceed with file export if there are playlists to export
     if not all(playlist.get("tracks") == [] for playlist in playlists_to_export):
-        # Use the new focused window creation method
-        root = create_focused_tk_window()
+        import tkinter as tk
+        from tkinter.filedialog import asksaveasfilename
         
-        # Immediate focus and top-most settings
-        root.attributes("-topmost", True)
-        root.lift()
-        root.focus_force()
+        # Create Tkinter root window
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        root.iconify()   # Minimize to ensure it doesn't block
         
-        # Slight delay to ensure window is ready
-        root.after(100, root.attributes, "-topmost", False)
-        
-        file_path = asksaveasfilename(
-            defaultextension=".json", 
-            filetypes=[("JSON files", "*.json")], 
-            parent=root  # Ensure modal dialog
-        )
-        root.destroy()  # Close the window after file selection
-        
-        if file_path:
-            with open(file_path, "w") as file:
-                json.dump(playlists_to_export, file, indent=4)
+        # Use after method to show file dialog
+        def show_save_dialog():
+            file_path = asksaveasfilename(
+                defaultextension=".json", 
+                filetypes=[("JSON files", "*.json")]
+            )
             
-            # Calculate total duration in hours, minutes, and seconds
-            total_seconds = total_duration_ms // 1000
-            hours = total_seconds // 3600
-            minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60
+            # Process the file path
+            if file_path:
+                with open(file_path, "w") as file:
+                    json.dump(playlists_to_export, file, indent=4)
+                
+                # Calculate total duration in hours, minutes, and seconds
+                total_seconds = total_duration_ms // 1000
+                hours = total_seconds // 3600
+                minutes = (total_seconds % 3600) // 60
+                seconds = total_seconds % 60
+                
+                print(f"\nPlaylists exported successfully to {file_path}")
+                print(f"Total exported: {successful_playlists} playlists, {total_tracks} tracks, "
+                      f"{hours:02d}:{minutes:02d}:{seconds:02d} playback time")
+                
+                # Only show failed playlists if the export was completed
+                if failed_playlists:
+                    print("\nThe following playlists could not be backed up:")
+                    for name, reason in failed_playlists:
+                        print(f"- {name}: {reason}")
+            else:
+                print("\nExport canceled.")
             
-            print(f"\nPlaylists exported successfully to {file_path}")
-            print(f"Total exported: {successful_playlists} playlists, {total_tracks} tracks, "
-                  f"{hours:02d}:{minutes:02d}:{seconds:02d} playback time")
-            
-            # Only show failed playlists if the export was completed
-            if failed_playlists:
-                print("\nThe following playlists could not be backed up:")
-                for name, reason in failed_playlists:
-                    print(f"- {name}: {reason}")
-        else:
-            print("\nExport canceled.")
+            # Destroy the root window
+            root.destroy()
+        
+        # Schedule the dialog to show immediately
+        root.after(50, show_save_dialog)
+        
+        # Start the Tkinter event loop
+        root.mainloop()
 
 def import_playlists(playlists, option):
     """
@@ -179,60 +186,68 @@ def import_playlists(playlists, option):
         option (str): Import option (e.g., recreate, follow, etc.).
     """
     sp = get_spotify_client()  # Retrieve Spotify client within the function
-    # Use the new focused window creation method
-    root = create_focused_tk_window()
     
-    # Immediate focus and top-most settings
-    root.attributes("-topmost", True)
-    root.lift()
-    root.focus_force()
+    import tkinter as tk
+    from tkinter.filedialog import askopenfilename
     
-    # Slight delay to ensure window is ready
-    root.after(100, root.attributes, "-topmost", False)
+    # Create Tkinter root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    root.iconify()   # Minimize to ensure it doesn't block
     
-    file_path = askopenfilename(
-        title="Select a backup file", 
-        filetypes=[("JSON files", "*.json")], 
-        parent=root  # Ensure modal dialog
-    )
-    if not file_path:
-        print("No file selected.")
+    # Use after method to show file dialog
+    def show_open_dialog():
+        file_path = askopenfilename(
+            title="Select a backup file", 
+            filetypes=[("JSON files", "*.json")]
+        )
+        
+        if not file_path:
+            print("No file selected.")
+            root.destroy()
+            return
+
+        with open(file_path, "r") as file:
+            imported_playlists = json.load(file)
+
+        print("Playlists loaded from file.")
+        successful_imports = []
+        existing_ids = {pl["spotify_id"] for pl in playlists if "spotify_id" in pl}
+
+        for playlist in imported_playlists:
+            if playlist["spotify_id"] in existing_ids:
+                print(f"Playlist '{playlist['name']}' already in cache - skipping")
+                continue
+
+            success = False
+            if option == "1":
+                success = recreate_playlist(sp, playlist)
+            elif option == "2":
+                success = follow_playlist(sp, playlist) or recreate_playlist(sp, playlist)
+            elif option == "3":
+                success = follow_playlist(sp, playlist)
+
+            if success:
+                successful_imports.append(playlist)
+                existing_ids.add(playlist["spotify_id"])
+
+        playlists.extend(successful_imports)
+        save_playlists_to_file(playlists)
+
+        formatted_duration = format_duration(
+            sum(track.get("duration_ms", 0) for pl in successful_imports for track in pl["tracks"])
+        )
+        print(f"Import complete: {len(successful_imports)} new playlists added, total duration {formatted_duration}.")
+        
+        # Destroy the root window
         root.destroy()
-        return
-
-    with open(file_path, "r") as file:
-        imported_playlists = json.load(file)
-
-    print("Playlists loaded from file.")
-    successful_imports = []
-    existing_ids = {pl["spotify_id"] for pl in playlists if "spotify_id" in pl}
-
-    for playlist in imported_playlists:
-        if playlist["spotify_id"] in existing_ids:
-            print(f"Playlist '{playlist['name']}' already in cache - skipping")
-            continue
-
-        success = False
-        if option == "1":
-            success = recreate_playlist(sp, playlist)
-        elif option == "2":
-            success = follow_playlist(sp, playlist) or recreate_playlist(sp, playlist)
-        elif option == "3":
-            success = follow_playlist(sp, playlist)
-
-        if success:
-            successful_imports.append(playlist)
-            existing_ids.add(playlist["spotify_id"])
-
-    playlists.extend(successful_imports)
-    save_playlists_to_file(playlists)
-
-    formatted_duration = format_duration(
-        sum(track.get("duration_ms", 0) for pl in successful_imports for track in pl["tracks"])
-    )
-    print(f"Import complete: {len(successful_imports)} new playlists added, total duration {formatted_duration}.")
-    root.destroy()
     
+    # Schedule the dialog to show immediately
+    root.after(50, show_open_dialog)
+    
+    # Start the Tkinter event loop
+    root.mainloop()
+        
 def recreate_playlist(sp, playlist):
     """
     Recreate a playlist in the user's account.
