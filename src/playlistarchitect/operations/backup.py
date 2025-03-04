@@ -17,6 +17,29 @@ from playlistarchitect.utils.formatting_helpers import format_duration
 setup_logging()
 logger = logging.getLogger(__name__)
 
+def create_focused_tk_window():
+    """
+    Create a Tkinter window with enhanced focus settings.
+    
+    This function creates a Tkinter window that is designed to appear 
+    in the foreground with focus, even on the first attempt.
+    
+    Returns:
+        Tk: A configured Tkinter root window
+    """
+    import tkinter as tk
+    
+    # Create root window
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    
+    # Try multiple focus-related techniques
+    root.attributes("-topmost", True)  # Bring to top
+    root.attributes("-toolwindow", False)  # Ensure it's not minimized
+    root.deiconify()  # Show briefly to trigger focus
+    root.withdraw()  # Hide again, but now initialized
+    
+    return root
 
 def export_playlists(playlists, selected_ids=None):
     """
@@ -108,12 +131,23 @@ def export_playlists(playlists, selected_ids=None):
 
     # Only proceed with file export if there are playlists to export
     if not all(playlist.get("tracks") == [] for playlist in playlists_to_export):
-        root = Tk()
-        root.withdraw()
+        # Use the new focused window creation method
+        root = create_focused_tk_window()
+        
+        # Immediate focus and top-most settings
         root.attributes("-topmost", True)
-
-        file_path = asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
-        root.destroy()
+        root.lift()
+        root.focus_force()
+        
+        # Slight delay to ensure window is ready
+        root.after(100, root.attributes, "-topmost", False)
+        
+        file_path = asksaveasfilename(
+            defaultextension=".json", 
+            filetypes=[("JSON files", "*.json")], 
+            parent=root  # Ensure modal dialog
+        )
+        root.destroy()  # Close the window after file selection
         
         if file_path:
             with open(file_path, "w") as file:
@@ -135,7 +169,7 @@ def export_playlists(playlists, selected_ids=None):
                 for name, reason in failed_playlists:
                     print(f"- {name}: {reason}")
         else:
-            print("\nExport canceled.")               
+            print("\nExport canceled.")
 
 def import_playlists(playlists, option):
     """
@@ -145,13 +179,25 @@ def import_playlists(playlists, option):
         option (str): Import option (e.g., recreate, follow, etc.).
     """
     sp = get_spotify_client()  # Retrieve Spotify client within the function
-    root = Tk()
-    root.withdraw()
+    # Use the new focused window creation method
+    root = create_focused_tk_window()
+    
+    # Immediate focus and top-most settings
     root.attributes("-topmost", True)
-
-    file_path = askopenfilename(title="Select a backup file", filetypes=[("JSON files", "*.json")])
+    root.lift()
+    root.focus_force()
+    
+    # Slight delay to ensure window is ready
+    root.after(100, root.attributes, "-topmost", False)
+    
+    file_path = askopenfilename(
+        title="Select a backup file", 
+        filetypes=[("JSON files", "*.json")], 
+        parent=root  # Ensure modal dialog
+    )
     if not file_path:
         print("No file selected.")
+        root.destroy()
         return
 
     with open(file_path, "r") as file:
@@ -186,8 +232,7 @@ def import_playlists(playlists, option):
     )
     print(f"Import complete: {len(successful_imports)} new playlists added, total duration {formatted_duration}.")
     root.destroy()
-
-
+    
 def recreate_playlist(sp, playlist):
     """
     Recreate a playlist in the user's account.
@@ -211,7 +256,6 @@ def recreate_playlist(sp, playlist):
         print(f"Failed to recreate playlist '{playlist['name']}': {str(e)}")
         return False
 
-
 def follow_playlist(sp, playlist):
     """
     Attempt to follow a playlist.
@@ -231,7 +275,6 @@ def follow_playlist(sp, playlist):
         else:
             print(f"Could not follow playlist '{playlist['name']}': {e.msg}")
         return False
-
 
 def backup_options(playlists):
     """
@@ -265,12 +308,14 @@ def backup_options(playlists):
                     selected_ids = input("Select playlist IDs to export (comma-separated): ").strip()
                     selected_ids = [int(x.strip()) for x in selected_ids.split(",")]
                     export_playlists(playlists, selected_ids)
+                    return  # Return to main menu after exporting
                 except ValueError:
                     print("Invalid input. Please enter numeric playlist IDs.")
             elif export_choice == "2":
                 export_playlists(playlists)
+                return  # Return to main menu after exporting
             elif export_choice == "b":
-                continue
+                continue  # Stay in the backup menu
 
         elif choice == "2":
             # Import menu
@@ -285,8 +330,9 @@ def backup_options(playlists):
 
             if import_choice in ["1", "2", "3"]:
                 import_playlists(playlists, import_choice)
+                return  # Return to main menu after importing
             elif import_choice == "b":
-                continue
+                continue  # Stay in the backup menu
 
         elif choice == "c":  # Handle CANCEL_OPTION
             break  # Exit the backup options loop and return to the main menu
