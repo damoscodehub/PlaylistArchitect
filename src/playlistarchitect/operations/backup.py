@@ -17,30 +17,6 @@ from playlistarchitect.utils.formatting_helpers import format_duration
 setup_logging()
 logger = logging.getLogger(__name__)
 
-def create_focused_tk_window():
-    """
-    Create a Tkinter window with enhanced focus settings.
-    
-    This function creates a Tkinter window that is designed to appear 
-    in the foreground with focus, even on the first attempt.
-    
-    Returns:
-        Tk: A configured Tkinter root window
-    """
-    import tkinter as tk
-    
-    # Create root window
-    root = tk.Tk()
-    root.withdraw()  # Hide the main window
-    
-    # Try multiple focus-related techniques
-    root.attributes("-topmost", True)  # Bring to top
-    root.attributes("-toolwindow", False)  # Ensure it's not minimized
-    root.deiconify()  # Show briefly to trigger focus
-    root.withdraw()  # Hide again, but now initialized
-    
-    return root
-
 def export_playlists(playlists, selected_ids=None):
     """
     Export selected or all playlists to a file.
@@ -131,23 +107,22 @@ def export_playlists(playlists, selected_ids=None):
 
     # Only proceed with file export if there are playlists to export
     if not all(playlist.get("tracks") == [] for playlist in playlists_to_export):
-        # Use the new focused window creation method
-        root = create_focused_tk_window()
-        
-        # Immediate focus and top-most settings
+        root = Tk()
+        root.withdraw()
         root.attributes("-topmost", True)
-        root.lift()
-        root.focus_force()
-        
-        # Slight delay to ensure window is ready
-        root.after(100, root.attributes, "-topmost", False)
+        root.lift()  # Bring the window to the top
+        root.focus_force()  # Force focus on the window
+
+        # New approach to ensure focus
+        root.deiconify()  # Show the root window
+        root.update()  # Update the window state
         
         file_path = asksaveasfilename(
             defaultextension=".json", 
             filetypes=[("JSON files", "*.json")], 
-            parent=root  # Ensure modal dialog
+            parent=root  # Add parent to ensure it's modal
         )
-        root.destroy()  # Close the window after file selection
+        root.destroy()
         
         if file_path:
             with open(file_path, "w") as file:
@@ -179,21 +154,20 @@ def import_playlists(playlists, option):
         option (str): Import option (e.g., recreate, follow, etc.).
     """
     sp = get_spotify_client()  # Retrieve Spotify client within the function
-    # Use the new focused window creation method
-    root = create_focused_tk_window()
-    
-    # Immediate focus and top-most settings
+    root = Tk()
+    root.withdraw()
     root.attributes("-topmost", True)
-    root.lift()
-    root.focus_force()
-    
-    # Slight delay to ensure window is ready
-    root.after(100, root.attributes, "-topmost", False)
+    root.lift()  # Bring the window to the top
+    root.focus_force()  # Force focus on the window
+
+    # New approach to ensure focus
+    root.deiconify()  # Show the root window
+    root.update()  # Update the window state
     
     file_path = askopenfilename(
         title="Select a backup file", 
         filetypes=[("JSON files", "*.json")], 
-        parent=root  # Ensure modal dialog
+        parent=root  # Add parent to ensure it's modal
     )
     if not file_path:
         print("No file selected.")
