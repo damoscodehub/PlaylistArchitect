@@ -17,6 +17,7 @@ def remove_playlists_from_library(sp, playlists):
 
         if choice == "1":
             remove_selected_playlists(sp, playlists)
+            return  # Return to main menu after removing selected playlists
         elif choice == "2":
             confirm = input("Remove all playlists from Your Library? (y/n): ").strip().lower()
             if confirm == "y":
@@ -29,11 +30,11 @@ def remove_playlists_from_library(sp, playlists):
                 playlists.clear()  # Clear all playlists from the cache
                 save_playlists_to_file(playlists)  # Update cached playlists data
                 print("All playlists removed from Your Library.")
+                return  # Return to main menu after removing all playlists
             elif confirm != "n":
                 print("Invalid input. Please enter 'y' or 'n'.")
         elif choice == "b":
-            return
-
+            return  # Return to main menu if 'b' is selected
 
 def remove_selected_playlists(sp, playlists):
     """Remove specific playlists from the library."""

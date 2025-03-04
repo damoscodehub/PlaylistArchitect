@@ -215,7 +215,7 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
         print(f"\n{msg}\n")
 
         if not playlists:
-            print("⚠️ No playlists found! Returning without displaying a table.")
+            print("No playlists found! Returning without displaying a table.")
             return
 
         # Define sorting key functions
@@ -276,7 +276,7 @@ def display_playlists_table(playlists, msg="", selected_ids=None, show_selection
 
     except Exception as e:
         logger.error(f"Error displaying playlists: {e}")
-        print(f"❌ Error displaying playlists: {e}")
+        print(f"Error displaying playlists: {e}")
         
 
 def show_selected_playlists(selected_playlists, all_playlists, msg="Currently selected playlists"):
