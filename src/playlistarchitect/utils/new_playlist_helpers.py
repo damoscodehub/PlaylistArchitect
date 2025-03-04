@@ -662,6 +662,147 @@ def handle_remove_playlists(selected_playlist_blocks, playlists):
         except ValueError:
             print("Invalid input. Integers values are expected.")
 
+def handle_shuffle_blocks(selected_playlist_blocks):
+    """
+    Handle the shuffling of selected playlist blocks by reassigning their positions randomly.
+
+    Parameters:
+    selected_playlist_blocks (List[Dict]): Currently selected playlist blocks
+
+    Returns:
+    bool: True if the user cancels or goes back, False otherwise
+    """
+    while True:
+        # Prompt for blocks to shuffle
+        shuffle_input = input(
+            "Enter the numbers of the blocks (comma-separated) to shuffle or 'a' to shuffle all: "
+        ).strip().lower()
+
+        # Handle "back" or "cancel"
+        if shuffle_input in ['b', 'back']:
+            return False
+        if shuffle_input in ['c', 'cancel', 'main', 'main menu']:
+            return True
+
+        # Handle "a" to shuffle all
+        if shuffle_input == 'a':
+            block_indices = list(range(len(selected_playlist_blocks)))
+        else:
+            # Parse and validate block numbers
+            try:
+                block_indices = [int(x.strip()) - 1 for x in shuffle_input.split(",") if x.strip()]
+                invalid_indices = [idx + 1 for idx in block_indices if idx < 0 or idx >= len(selected_playlist_blocks)]
+                valid_indices = [idx for idx in block_indices if 0 <= idx < len(selected_playlist_blocks)]
+
+                if invalid_indices:
+                    if not valid_indices:
+                        # No valid block numbers entered
+                        print("No valid block numbers inserted.")
+                        continue  # Reprompt for input
+                    else:
+                        # At least one valid and one invalid block number
+                        print(f"Invalid block numbers: {', '.join(map(str, invalid_indices))}")
+                        options = {
+                            "1": "Ignore them and shuffle the rest",
+                            "2": "Ignore them and enter additional block numbers to shuffle",
+                            "3": "Restart the selection of blocks to shuffle",
+                            "b": "Back",
+                            "c": "Cancel and go to main menu",
+                        }
+                        option = menu_navigation(options, prompt="Select an option:")
+
+                        if option == "1":
+                            block_indices = valid_indices
+                        elif option == "2":
+                            while True:
+                                additional_input = input("Enter additional block numbers (comma-separated) to shuffle: ").strip()
+                                additional_indices = [int(x.strip()) - 1 for x in additional_input.split(",") if x.strip()]
+                                # Validate additional block numbers
+                                invalid_additional_indices = [idx + 1 for idx in additional_indices if idx < 0 or idx >= len(selected_playlist_blocks)]
+                                valid_additional_indices = [idx for idx in additional_indices if 0 <= idx < len(selected_playlist_blocks)]
+
+                                if invalid_additional_indices:
+                                    # If there are invalid block numbers, print them and reprompt
+                                    print(f"Invalid block numbers: {', '.join(map(str, invalid_additional_indices))}")
+                                    # Add valid additional indices to the list of valid indices
+                                    valid_indices.extend(valid_additional_indices)
+                                    continue  # Reprompt for additional input
+                                else:
+                                    # If all additional block numbers are valid, add them to the list of valid indices
+                                    valid_indices.extend(valid_additional_indices)
+                                    block_indices = valid_indices
+                                    break
+                        elif option == "3":
+                            continue  # Restart the outer loop
+                        elif option in ['b', 'back']:
+                            return False
+                        elif option in ['c', 'cancel', 'main', 'main menu']:
+                            return True
+                else:
+                    # All block numbers are valid
+                    block_indices = valid_indices
+            except ValueError:
+                print("Invalid input. Expected comma-separated block numbers or 'a'.")
+                continue
+
+        # Ensure at least one valid block is selected
+        if not block_indices:
+            print("No valid blocks selected.")
+            continue
+
+        # Display blocks to shuffle
+        print(f"Blocks to shuffle: {', '.join(map(str, [idx + 1 for idx in block_indices]))}")
+
+        # Prompt to proceed or restart
+        options = {
+            "1": "Proceed to shuffle",
+            "2": "Restart the selection",
+            "b": "Back",
+            "c": "Cancel and go to main menu",
+        }
+        option = menu_navigation(options, prompt="Select an option:")
+
+        if option == "1":
+            # Reassign block positions randomly
+            for idx in block_indices:
+                # Generate a random new position (different from the current one)
+                new_position = idx
+                while new_position == idx:
+                    new_position = random.randint(0, len(selected_playlist_blocks) - 1)
+
+                # Move the block to the new position
+                block_to_move = selected_playlist_blocks.pop(idx)
+                selected_playlist_blocks.insert(new_position, block_to_move)
+
+            print("Blocks shuffled successfully.")
+            return False  # Go back to the main menu
+        elif option == "2":
+            continue  # Restart the outer loop
+        elif option in ['b', 'back']:
+            return False
+        elif option in ['c', 'cancel', 'main', 'main menu']:
+            return True
+                
+def handle_shuffle_options():
+    """
+    Handle shuffle options selection
+    
+    Returns:
+    str: Selected shuffle option
+    """
+    
+    shuffle_menu = {
+        "1": "Shuffle the order of selected playlists",
+        "2": "Shuffle all tracks",
+        "3": "No shuffle",
+    }
+    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
+    return {
+        "1": "Shuffle playlists",
+        "2": "Shuffle tracks",
+        "3": "No shuffle",
+    }[shuffle_choice]
+
 def handle_reorder_blocks(selected_playlist_blocks, playlists):
     """
     Handle the reordering of selected playlist blocks.
@@ -671,7 +812,7 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
     playlists (List[Dict]): List of all playlists
 
     Returns:
-    bool: True if blocks were reordered, False if the user canceled or went back
+    bool: True if the user cancels or goes back, False otherwise
     """
     # Check if there are enough blocks to reorder
     if len(selected_playlist_blocks) < 2:
@@ -682,21 +823,31 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
     display_selected_blocks(selected_playlist_blocks, playlists)
     print()
 
-    # Prompt for the block to reorder
+    # Main loop for reordering or shuffling
     while True:
-        block_input = input("Enter a block number to reorder: ").strip().lower()
-        
+        # Prompt for the block to reorder or shuffle
+        block_input = input(
+            "Enter a block number to reorder or 's' to see the shuffle options (or 'b' to go back, 'c' to cancel): "
+        ).strip().lower()
+
         # Handle "back" or "cancel"
         if block_input in ['b', 'back']:
             return False
         if block_input in ['c', 'cancel', 'main', 'main menu']:
             return True  # Signal to cancel the whole process
 
-        # Validate block number
+        # Handle shuffle option
+        if block_input in ['s', 'shuffle']:
+            if handle_shuffle_blocks(selected_playlist_blocks):
+                return True  # Signal to cancel the whole process
+            else:
+                return False  # Go back to the main menu of the new playlist creation process
+
+        # Validate block number for reordering
         try:
             block_index = int(block_input) - 1  # Convert to 0-based index
             if 0 <= block_index < len(selected_playlist_blocks):
-                break
+                break  # Valid block number, proceed to reordering
             else:
                 print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
         except ValueError:
@@ -704,8 +855,10 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
 
     # Prompt for the new position
     while True:
-        new_position_input = input(f"Enter a new block number for block {block_index + 1}: ").strip().lower()
-        
+        new_position_input = input(
+            f"Enter a new block number for block {block_index + 1}: "
+        ).strip().lower()
+
         # Handle "back" or "cancel"
         if new_position_input in ['b', 'back']:
             return False
@@ -719,7 +872,7 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
                 if new_position == block_index:
                     print("The number entered is the same as the selected block. Enter a different one.")
                     continue
-                break
+                break  # Valid new position, proceed to reordering
             else:
                 print(f"ValueError. Expected a single integer value from 1 to {len(selected_playlist_blocks)}.")
         except ValueError:
@@ -733,39 +886,36 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
         )
         print("Done!")
     else:
-        # Prompt for swap or push
-        while True:
-            option_input = input(
-                "1. Swap those two blocks\n"
-                "2. Push needed blocks\n"
-                "Select an option: "
-            ).strip().lower()
+        # Prompt for swap or push using menu_navigation
+        options = {
+            "1": "Swap those two blocks",
+            "2": "Push needed blocks",
+            "b": "Back",
+            "c": "Cancel",
+        }
+        option_input = menu_navigation(options, prompt="Select an option:")
 
-            # Handle "back" or "cancel"
-            if option_input in ['b', 'back']:
-                return False
-            if option_input in ['c', 'cancel', 'main', 'main menu']:
-                return True  # Signal to cancel the whole process
+        # Handle "back" or "cancel"
+        if option_input in ['b', 'back']:
+            return False
+        if option_input in ['c', 'cancel', 'main', 'main menu']:
+            return True  # Signal to cancel the whole process
 
-            # Validate option
-            if option_input == "1":
-                # Swap the two blocks
-                selected_playlist_blocks[block_index], selected_playlist_blocks[new_position] = (
-                    selected_playlist_blocks[new_position], selected_playlist_blocks[block_index]
-                )
-                print("Done!")
-                break
-            elif option_input == "2":
-                # Push blocks
-                block_to_move = selected_playlist_blocks.pop(block_index)
-                selected_playlist_blocks.insert(new_position, block_to_move)
-                print("Done!")
-                break
-            else:
-                print("Invalid option. Select 1 or 2:")
+        # Validate option
+        if option_input == "1":
+            # Swap the two blocks
+            selected_playlist_blocks[block_index], selected_playlist_blocks[new_position] = (
+                selected_playlist_blocks[new_position], selected_playlist_blocks[block_index]
+            )
+            print("Done!")
+        elif option_input == "2":
+            # Push blocks
+            block_to_move = selected_playlist_blocks.pop(block_index)
+            selected_playlist_blocks.insert(new_position, block_to_move)
+            print("Done!")
 
     return False  # Signal that reordering was successful
-                                    
+
 def handle_edit_blocks(selected_playlist_blocks, playlists):
     """
     Handle the editing of selected playlist blocks.
@@ -842,26 +992,6 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
         
         if edit_choice == "b":
             break  # Exit the editing loop
-
-def handle_shuffle_options():
-    """
-    Handle shuffle options selection
-    
-    Returns:
-    str: Selected shuffle option
-    """
-    
-    shuffle_menu = {
-        "1": "Shuffle the order of selected playlists",
-        "2": "Shuffle all tracks",
-        "3": "No shuffle",
-    }
-    shuffle_choice = menu_navigation(shuffle_menu, prompt="Select shuffle option:")
-    return {
-        "1": "Shuffle playlists",
-        "2": "Shuffle tracks",
-        "3": "No shuffle",
-    }[shuffle_choice]
 
 def handle_time_options():
     """

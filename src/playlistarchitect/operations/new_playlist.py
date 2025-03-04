@@ -51,10 +51,10 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
         main_menu = {
             "1": "Show selected blocks", 
             "2": "Add blocks to selection",
-            "3": "Remove blocks from selection",
-            "4": "Reorder blocks",  # New option
-            "5": "Edit selected blocks",  # Moved from 4 to 5
-            "6": "Proceed with current selection",  # Moved from 5 to 6
+            "3": "Edit selected blocks",
+            "4": "Reorder blocks",
+            "5": "Remove blocks from selection",
+            "6": "Proceed with current selection",
             "b": "Back",
             "c": "Cancel",
         }
@@ -66,15 +66,15 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
         elif main_choice == "2": # Add blocks to selection
             handle_add_playlists(playlists, selected_playlist_blocks)
 
-        elif main_choice == "3": # Remove blocks from selection
-            handle_remove_playlists(selected_playlist_blocks, playlists)
+        elif main_choice == "3":  # Edit selected blocks
+            handle_edit_blocks(selected_playlist_blocks, playlists)
 
         elif main_choice == "4":  # Reorder blocks
             if handle_reorder_blocks(selected_playlist_blocks, playlists):
                 return  # Cancel the whole process if the user chose to cancel
 
-        elif main_choice == "5":  # Edit selected blocks
-            handle_edit_blocks(selected_playlist_blocks, playlists)
+        elif main_choice == "5": # Remove blocks from selection
+            handle_remove_playlists(selected_playlist_blocks, playlists)
 
         elif main_choice == "6":  # Proceed with current selection
             if handle_proceed_menu(
