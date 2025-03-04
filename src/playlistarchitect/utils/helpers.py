@@ -10,7 +10,6 @@ def parse_time_input(time_str):
         print("Invalid time format. Please use hh:mm:ss.")
         return None
 
-
 def get_variation_input(variation_str):
     """Converts variation in minutes to milliseconds."""
     try:
@@ -18,17 +17,6 @@ def get_variation_input(variation_str):
     except ValueError:
         print("Invalid variation input. Please enter a number.")
         return None
-
-
-# def row_count(playlists):
-#     """
-#     Assigns a temporary 'count' field to each playlist for display purposes,
-#     while keeping the original 'id' intact.
-#     """
-#     for index, playlist in enumerate(playlists, start=1):
-#         playlist['count'] = index  # Add a separate count field instead of modifying 'id'
-
-        
             
 def get_validated_input(prompt, valid_options=None, input_type=str):
     """
@@ -54,8 +42,7 @@ def get_validated_input(prompt, valid_options=None, input_type=str):
             return user_input
         except ValueError:
             print(f"Invalid input. Please enter a valid {input_type.__name__}.")
-            
-            
+                      
 def menu_navigation(options: dict, prompt="Select an option:"):
     """
     Reusable function to handle menu navigation with flexible keys for back and cancel.
