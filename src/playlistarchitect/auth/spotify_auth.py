@@ -1,9 +1,9 @@
 import spotipy
 import os
 import logging
-from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 from dotenv import load_dotenv
 from pathlib import Path
+from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +26,14 @@ def check_environment_variables():
 
 
 def create_spotify_oauth():
-    """Create a SpotifyOAuth object with the required credentials and scope."""
+    """Create a SpotifyOAuth object with the required credentials and scope."""    
+    logging.getLogger('spotipy').setLevel(logging.CRITICAL)
     return SpotifyOAuth(
         client_id=os.getenv("SPOTIPY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),
         scope="user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private",
-        cache_path=str(cache_path),  # Ensure it's a string
+        cache_path=str(cache_path),
         open_browser=True,
     )
 
@@ -49,14 +50,6 @@ def initialize_spotify_client():
         # Initialize SpotifyOAuth
         auth_manager = create_spotify_oauth()
         
-        # Force new token acquisition
-        try:
-            # Attempt to get a new access token without browser interaction
-            token_info = auth_manager.refresh_access_token(auth_manager.get_cached_token()['refresh_token'])
-        except Exception:
-            # If refresh fails, force a new authorization
-            token_info = auth_manager.get_access_token(as_dict=True)
-        
         # Initialize Spotify client with the new token
         sp = spotipy.Spotify(auth_manager=auth_manager)
         
@@ -67,6 +60,9 @@ def initialize_spotify_client():
     except SpotifyOauthError as oauth_error:
         logger.error(f"Spotify OAuth failed: {oauth_error}")
         raise RuntimeError("Spotify authentication failed. Please check your credentials.") from oauth_error
+    except EnvironmentError as env_error:
+        logger.error(f"Environment setup error: {env_error}")
+        raise    
     except Exception as e:
         logger.error(f"Unexpected error during Spotify client initialization: {str(e)}")
         raise RuntimeError("An unexpected error occurred during Spotify client initialization.") from e

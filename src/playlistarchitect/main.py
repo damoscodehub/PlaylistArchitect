@@ -1,9 +1,13 @@
 import logging
 import sys
 from typing import List, Dict, Any
-
 from playlistarchitect.utils.logging_utils import setup_logging
-from playlistarchitect.auth.spotify_auth import initialize_spotify_client, clear_cached_token, force_immediate_authentication, get_spotify_client
+from playlistarchitect.auth.spotify_auth import (
+    initialize_spotify_client,
+    clear_cached_token,
+    force_immediate_authentication,
+    get_spotify_client
+)
 from playlistarchitect.operations.retrieve_playlists_table import (
     get_all_playlists_with_details,
     save_playlists_to_file,
@@ -14,7 +18,6 @@ from playlistarchitect.operations.backup import backup_options
 from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
 from playlistarchitect.utils.helpers import menu_navigation
-from playlistarchitect.utils.constants import BACK_OPTION
 
 # Set up logging
 setup_logging()
@@ -84,9 +87,7 @@ def main() -> None:
 
                 if sub_choice == "1":
                     # Attempt immediate authentication
-                    if force_immediate_authentication():
-                        print("Authentication successful!")
-                    else:
+                    if not force_immediate_authentication():
                         print("Authentication failed. You may need to manually authenticate later.")
                 elif sub_choice == "2":
                     # Do nothing, authentication will happen automatically when needed
