@@ -72,8 +72,7 @@ def main() -> None:
  
             if choice == "6":
                 # Clear the cached token
-                clear_cached_token()
-                print("Cached token cleared.")
+                clear_cached_token()                
                 print("A new authentication is required to operate a Spotify account.")
                 
                 # Authentication submenu
