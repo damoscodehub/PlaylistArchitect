@@ -42,30 +42,34 @@ def initialize_spotify_client():
     global sp
     if sp is not None:
         return  # Already initialized
-
     try:
         logger.debug("Initializing Spotify client...")
         check_environment_variables()
-
-        # Initialize Spotify client
+        
+        # Initialize SpotifyOAuth
         auth_manager = create_spotify_oauth()
+        
+        # Force new token acquisition
+        try:
+            # Attempt to get a new access token without browser interaction
+            token_info = auth_manager.refresh_access_token(auth_manager.get_cached_token()['refresh_token'])
+        except Exception:
+            # If refresh fails, force a new authorization
+            token_info = auth_manager.get_access_token(as_dict=True)
+        
+        # Initialize Spotify client with the new token
         sp = spotipy.Spotify(auth_manager=auth_manager)
-
+        
         # Test the connection by retrieving user info
         user_info = sp.current_user()
         logger.info(f"Successfully connected to Spotify as {user_info['display_name']}")
         logger.debug("Spotify client initialized successfully.")
-
     except SpotifyOauthError as oauth_error:
         logger.error(f"Spotify OAuth failed: {oauth_error}")
         raise RuntimeError("Spotify authentication failed. Please check your credentials.") from oauth_error
-    except EnvironmentError as env_error:
-        logger.error(f"Environment setup error: {env_error}")
-        raise
     except Exception as e:
         logger.error(f"Unexpected error during Spotify client initialization: {str(e)}")
         raise RuntimeError("An unexpected error occurred during Spotify client initialization.") from e
-
 
 def get_spotify_client():
     """Return the already initialized Spotify client."""
@@ -79,7 +83,36 @@ def clear_cached_token():
     """Clear the cached authentication token."""
     try:
         if cache_path.exists():
-            cache_path.unlink()  # Equivalent to os.remove()
-            logger.info("Cached token cleared. Please re-authenticate.")
+            cache_path.unlink()  # Remove cache file
+            logger.info("Cached token cleared.")
     except Exception as e:
         logger.error(f"Failed to clear cached token: {e}")
+        
+def force_immediate_authentication():
+    """
+    Force immediate authentication by creating a new SpotifyOAuth instance
+    and explicitly requesting a new access token.
+    
+    Returns:
+        bool: True if authentication was successful, False otherwise
+    """
+    try:
+        # Create a new auth manager
+        auth_manager = create_spotify_oauth()
+        
+        # Explicitly request a new access token
+        # This will open the browser and force user interaction
+        token_info = auth_manager.get_access_token(as_dict=True)
+        
+        # Reinitialize the global Spotify client with the new auth manager
+        global sp
+        sp = spotipy.Spotify(auth_manager=auth_manager)
+        
+        # Verify the connection by fetching user info
+        user_info = sp.current_user()
+        logger.info(f"Successfully connected to Spotify as {user_info['display_name']}")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Immediate authentication failed: {e}")
+        return False
