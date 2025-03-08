@@ -1,23 +1,3 @@
-from datetime import timedelta
-
-def parse_time_input(time_str):
-    """Converts time in hh:mm:ss format to milliseconds using timedelta."""
-    try:
-        hours, minutes, seconds = map(int, time_str.split(":"))
-        td = timedelta(hours=hours, minutes=minutes, seconds=seconds)
-        return int(td.total_seconds() * 1000)  # Convert to milliseconds
-    except ValueError:
-        print("Invalid time format. Please use hh:mm:ss.")
-        return None
-
-def get_variation_input(variation_str):
-    """Converts variation in minutes to milliseconds."""
-    try:
-        return int(float(variation_str) * 60 * 1000)  # Support decimals
-    except ValueError:
-        print("Invalid variation input. Please enter a number.")
-        return None
-            
 def get_validated_input(prompt, valid_options=None, input_type=str):
     """
     Prompt the user for input and validate it.
