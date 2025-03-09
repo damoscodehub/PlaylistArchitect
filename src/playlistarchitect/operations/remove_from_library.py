@@ -1,7 +1,7 @@
 import logging
 from playlistarchitect.operations.retrieve_playlists_table import display_playlists_table, save_playlists_to_file
 from playlistarchitect.utils.helpers import menu_navigation
-from playlistarchitect.utils.constants import BACK_OPTION
+from playlistarchitect.utils.constants import Option, Prompt, Message
 
 logger = logging.getLogger(__name__)
 
@@ -11,9 +11,9 @@ def remove_playlists_from_library(sp, playlists):
         main_menu = {
             "1": "Remove a selection of playlists",
             "2": "Remove all playlists",
-            "b": BACK_OPTION,
+            "b": Option.BACK.value,
         }
-        choice = menu_navigation(main_menu, prompt="Select an option:")
+        choice = menu_navigation(main_menu, prompt=Prompt.SELECT.value)
 
         if choice == "1":
             remove_selected_playlists(sp, playlists)
@@ -32,7 +32,7 @@ def remove_playlists_from_library(sp, playlists):
                 print("All playlists removed from Your Library.")
                 return  # Return to main menu after removing all playlists
             elif confirm != "n":
-                print("Invalid input. Please enter 'y' or 'n'.")
+                print(Message.INVALID_INPUT_YN.value)
         elif choice == "b":
             return  # Return to main menu if 'b' is selected
 
@@ -67,7 +67,7 @@ def remove_selected_playlists(sp, playlists):
             selected_ids = {int(x.strip()) for x in selected_input.split(",")}
             selected_playlists = [p for p in playlists if p["id"] in selected_ids]  # Correctly filter by ID
         except ValueError:
-            print("Invalid input. Please enter numeric playlist IDs.")
+            print(Message.INVALID_INPUT_ID.value)
             continue
 
         while True:
@@ -75,7 +75,7 @@ def remove_selected_playlists(sp, playlists):
                 "1": "Show selected playlists data",
                 "2": "Edit selection",
                 "3": "Remove selected playlists from Your Library",
-                "b": BACK_OPTION,
+                "b": Option.BACK.value,
             }
             sub_choice = menu_navigation(selection_menu, prompt="What do you want to do with this selection?")
 
@@ -113,7 +113,7 @@ def edit_selection(selected_playlists, playlists):
         edit_menu = {
             "1": "Add more playlists to the selection",
             "2": "Remove one or more playlists from the selection",
-            "b": BACK_OPTION,
+            "b": Option.BACK.value,
         }
         choice = menu_navigation(edit_menu, prompt="Edit selection:")
 
@@ -126,7 +126,7 @@ def edit_selection(selected_playlists, playlists):
                 selected_ids.update(new_ids)  # Add new IDs to the selection
                 selected_playlists.extend([p for p in playlists if p["id"] in new_ids])
             except ValueError:
-                print("Invalid input. Please enter numeric playlist IDs.")
+                print(Message.INVALID_INPUT_ID.value)
         elif choice == "2":
             # Pass selected_ids to display_playlists_table
             display_playlists_table(selected_playlists, "Showing selected playlists", selected_ids=selected_ids, show_selection_column=False)
@@ -136,6 +136,6 @@ def edit_selection(selected_playlists, playlists):
                 selected_ids.difference_update(remove_ids)  # Remove IDs from the selection
                 selected_playlists[:] = [p for p in selected_playlists if p["id"] not in remove_ids]
             except ValueError:
-                print("Invalid input. Please enter numeric playlist IDs.")
+                print(Message.INVALID_INPUT_ID.value)
         elif choice == "b":
             return

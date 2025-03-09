@@ -1,3 +1,5 @@
+from playlistarchitect.utils.constants import Option.BACK.value, Option.CANCEL.value, Prompt.SELECT.value
+
 def get_validated_input(prompt, valid_options=None, input_type=str):
     """
     Prompt the user for input and validate it.
@@ -23,14 +25,14 @@ def get_validated_input(prompt, valid_options=None, input_type=str):
         except ValueError:
             print(f"Invalid input. Please enter a valid {input_type.__name__}.")
                       
-def menu_navigation(options: dict, prompt="Select an option:"):
+def menu_navigation(options: dict, prompt=Prompt.SELECT.value):
     """
     Reusable function to handle menu navigation with flexible keys for back and cancel.
     Args:
-        options (dict): A dictionary of menu options where keys can map to constants like CANCEL_OPTION or BACK_OPTION.
+        options (dict): A dictionary of menu options where keys can map to constants like Option.CANCEL.value or Option.BACK.value.
         prompt (str): The prompt to display to the user.
     Returns:
-        str: The selected key (e.g., "1", "a", BACK_OPTION, or CANCEL_OPTION).
+        str: The selected key (e.g., "1", "a", Option.BACK.value, or Option.CANCEL.value).
     """
     # Display the menu
     print("\n" + "\n".join([f"{key}. {value}" for key, value in options.items()]))

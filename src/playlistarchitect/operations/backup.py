@@ -9,7 +9,7 @@ from playlistarchitect.operations.retrieve_playlists_table import (
 )
 from playlistarchitect.auth.spotify_auth import get_spotify_client
 from playlistarchitect.utils.helpers import menu_navigation
-from playlistarchitect.utils.constants import BACK_OPTION, CANCEL_OPTION
+from playlistarchitect.utils.constants import Option, Prompt, Message
 from spotipy.exceptions import SpotifyException
 from playlistarchitect.utils.formatting_helpers import format_duration
 
@@ -261,20 +261,20 @@ def backup_options(playlists):
         backup_menu = {
             "1": "Export playlists",
             "2": "Import playlists",
-            "c": CANCEL_OPTION,  # Exit to main menu
+            "c": Option.CANCEL.value,  # Exit to main menu
         }
 
-        choice = menu_navigation(backup_menu, prompt="Select a backup option:")
+        choice = menu_navigation(backup_menu, prompt=Prompt.SELECT.value)
 
         if choice == "1":
             # Export menu
             export_menu = {
                 "1": "A selection of saved/created playlists",
                 "2": "All saved/created playlists",
-                "b": BACK_OPTION,  # Return to backup menu
+                "b": Option.BACK.value,  # Return to backup menu
             }
 
-            export_choice = menu_navigation(export_menu, prompt="Select export option:")
+            export_choice = menu_navigation(export_menu, prompt=Prompt.SELECT.value)
 
             if export_choice == "1":                
                 display_playlists_table(playlists, "Showing cached playlists", show_selection_column=False)
@@ -284,7 +284,7 @@ def backup_options(playlists):
                     export_playlists(playlists, selected_ids)
                     return  # Return to main menu after exporting
                 except ValueError:
-                    print("Invalid input. Please enter numeric playlist IDs.")
+                    print(Message.INVALID_INPUT_ID.value)
             elif export_choice == "2":
                 export_playlists(playlists)
                 return  # Return to main menu after exporting
@@ -297,10 +297,10 @@ def backup_options(playlists):
                 "1": "Recreate all playlists (you will be the author)",
                 "2": "Add original playlists to Your Library and recreate the rest",
                 "3": "Add original playlists to Your Library and ignore the rest",
-                "b": BACK_OPTION,  # Return to backup menu
+                "b": Option.BACK.value,  # Return to backup menu
             }
 
-            import_choice = menu_navigation(import_menu, prompt="Select import option:")
+            import_choice = menu_navigation(import_menu, prompt=Prompt.SELECT.value)
 
             if import_choice in ["1", "2", "3"]:
                 import_playlists(playlists, import_choice)
@@ -308,5 +308,5 @@ def backup_options(playlists):
             elif import_choice == "b":
                 continue  # Stay in the backup menu
 
-        elif choice == "c":  # Handle CANCEL_OPTION
+        elif choice == "c":  # Handle Option.CANCEL.value
             break  # Exit the backup options loop and return to the main menu

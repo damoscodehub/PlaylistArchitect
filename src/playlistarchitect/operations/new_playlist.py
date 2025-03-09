@@ -10,6 +10,7 @@ from playlistarchitect.utils.new_playlist_helpers import (
     handle_reorder_blocks,
     create_playlist_on_spotify,
 )
+from playlistarchitect.utils.constants import Prompt, Message
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
             "b": "Back",
             "c": "Cancel",
         }
-        main_choice = menu_navigation(main_menu, prompt="Select an option:")
+        main_choice = menu_navigation(main_menu, prompt=Prompt.SELECT.value)
 
         if main_choice == "1":  # Show selected blocks
             display_selected_blocks(selected_playlist_blocks, playlists)
@@ -87,7 +88,7 @@ def create_new_playlist(playlists: List[Dict[str, Any]]) -> None:
                 confirm = input("\nConfirm? (y/n): ").strip().lower()
                 if confirm in ['y', 'n']:
                     break
-                print("Invalid input. Please enter 'y' or 'n'.")
+                print(Message.INVALID_INPUT_YN.value)
 
             if confirm == 'y':
                 # Create the playlist

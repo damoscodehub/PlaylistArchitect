@@ -18,6 +18,7 @@ from playlistarchitect.operations.backup import backup_options
 from playlistarchitect.operations.new_playlist import create_new_playlist
 from playlistarchitect.operations.remove_from_library import remove_playlists_from_library
 from playlistarchitect.utils.helpers import menu_navigation
+from playlistarchitect.utils.constants import Prompt
 
 # Set up logging
 setup_logging()
@@ -54,7 +55,7 @@ def main() -> None:
                 "7": "Exit",
             }
 
-            choice: str = menu_navigation(main_menu, prompt="Select an action:")
+            choice: str = menu_navigation(main_menu, prompt=Prompt.SELECT.value)
 
             if choice == "1":
                 create_new_playlist(playlists)
@@ -83,7 +84,7 @@ def main() -> None:
                     "1": "Authenticate now",
                     "2": "Authenticate automatically when necessary",
                 }
-                sub_choice: str = menu_navigation(auth_menu, prompt="Select an option:")
+                sub_choice: str = menu_navigation(auth_menu, prompt=Prompt.SELECT.value)
 
                 if sub_choice == "1":
                     # Attempt immediate authentication

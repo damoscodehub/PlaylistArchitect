@@ -5,7 +5,7 @@ from tabulate import tabulate
 from playlistarchitect.utils.formatting_helpers import format_duration
 from playlistarchitect.utils.helpers import menu_navigation
 from playlistarchitect.operations.retrieve_playlists_table import save_playlists_to_file
-
+from playlistarchitect.utils.constants import Message, Prompt
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ def format_duration_hhmm(seconds):
     minutes, _ = divmod(seconds, 60)
     return f"{hours:02}:{minutes:02}"
 
-def safe_input(prompt, validator=None, error_msg="Invalid input"):
+def safe_input(prompt, validator=None, error_msg=Message.INVALID_INPUT.value):
     """
     Handle input with validation and error messages
     
@@ -371,9 +371,9 @@ def validate_playlist_blocks(selected_playlist_blocks, playlists, new_block_indi
                         else:
                             print(f"Time exceeds available time. Maximum is {format_duration_hhmm(available_seconds)}.")
                     else:
-                        print("Invalid time format. Expected HH:MM.")
+                        print(Message.INVALID_INPUT_TIME.value)
                 else:
-                    print("Invalid time format. Expected HH:MM.")
+                    print(Message.INVALID_INPUT_TIME.value)
             except ValueError:
                 print("Invalid time format. Please enter hours and minutes as numbers.")
     
@@ -542,7 +542,7 @@ def handle_remove_playlists(selected_playlist_blocks, playlists):
             break  # Exit the loop after successful removal
             
         except ValueError:
-            print("Invalid input. Integers values are expected.")
+            print("Invalid input format. Only positive integers values are expected.")
 
 def handle_shuffle_blocks(selected_playlist_blocks):
     """
@@ -591,7 +591,7 @@ def handle_shuffle_blocks(selected_playlist_blocks):
                             "b": "Back",
                             "c": "Cancel and go to main menu",
                         }
-                        option = menu_navigation(options, prompt="Select an option:")
+                        option = menu_navigation(options, prompt=Prompt.SELECT.value)
 
                         if option == "1":
                             block_indices = valid_indices
@@ -642,7 +642,7 @@ def handle_shuffle_blocks(selected_playlist_blocks):
             "b": "Back",
             "c": "Cancel and go to main menu",
         }
-        option = menu_navigation(options, prompt="Select an option:")
+        option = menu_navigation(options, prompt=Prompt.SELECT.value)
 
         if option == "1":
             # Reassign block positions randomly
@@ -755,7 +755,7 @@ def handle_reorder_blocks(selected_playlist_blocks, playlists):
             "b": "Back",
             "c": "Cancel",
         }
-        option_input = menu_navigation(options, prompt="Select an option:")
+        option_input = menu_navigation(options, prompt=Prompt.SELECT.value)
 
         # Handle "back" or "cancel"
         if option_input in ['b', 'back']:
@@ -818,7 +818,7 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
                     
                     # Validate time format
                     if not validate_time_format(time_str):
-                        print("Invalid time format. Please use HH:MM.")
+                        print(Message.INVALID_INPUT_TIME.value)
                         continue  # Restart the loop
                     
                     # Parse time
@@ -835,9 +835,9 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
                                 print("Done!")
                                 break  # Exit the time input loop
                             else:
-                                print(f"Invalid time.")
+                                print(f"Invalid time. It must be less than or equal to {format_duration_hhmm(available_seconds)}.")
                         else:
-                            print("Invalid time format. Expected HH:MM.")
+                            print(Message.INVALID_INPUT_TIME.value)
                     except ValueError:
                         print("Invalid time format. Please enter numbers for hours and minutes.")
             else:
@@ -850,7 +850,7 @@ def handle_edit_blocks(selected_playlist_blocks, playlists):
             "1": "Edit a block",
             "b": "Go back",
         }
-        edit_choice = menu_navigation(edit_menu, prompt="Select an option:")
+        edit_choice = menu_navigation(edit_menu, prompt=Prompt.SELECT.value)
         
         if edit_choice == "b":
             break  # Exit the editing loop
