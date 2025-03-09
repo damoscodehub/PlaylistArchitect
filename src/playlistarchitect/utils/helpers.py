@@ -1,4 +1,4 @@
-from playlistarchitect.utils.constants import Option.BACK.value, Option.CANCEL.value, Prompt.SELECT.value
+from playlistarchitect.utils.constants import Prompt
 
 def get_validated_input(prompt, valid_options=None, input_type=str):
     """
