@@ -7,14 +7,41 @@ from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Default cache file path (can be overridden via environment variables)
 cache_path = Path(os.getenv("SPOTIPY_CACHE_PATH", ".spotify_cache")).resolve()
 
 # Global Spotify client
 sp = None
+
+
+def check_env_file():
+    """Check if the .env file exists and contains the required Spotify credentials."""
+    env_path = Path(".env")
+    if not env_path.exists():
+        return False
+    with open(env_path, "r") as f:
+        content = f.read()
+        return "SPOTIPY_CLIENT_ID" in content and "SPOTIPY_CLIENT_SECRET" in content
+
+
+def setup_spotify_credentials():
+    """Interactively prompt the user for Spotify API credentials and save them to the .env file."""
+    print()
+    print("Your Spotify API credentials are needed.")
+    print("You can find them at https://developer.spotify.com/dashboard/applications.")
+    print("(Video tutorial https://youtu.be/0fhkkkRuUxw.)")
+    print()
+    
+    client_id = input("Client ID: ").strip()
+    client_secret = input("Client Secret: ").strip()
+    redirect_uri = input("Redirect URI (or leave it empty to use the default: http://localhost:8888/callback): ").strip() or "http://localhost:8888/callback"
+
+    with open(".env", "w") as f:
+        f.write(f"SPOTIPY_CLIENT_ID={client_id}\n")
+        f.write(f"SPOTIPY_CLIENT_SECRET={client_secret}\n")
+        f.write(f"SPOTIPY_REDIRECT_URI={redirect_uri}\n")
+
+    print("Credentials saved to .env file. You can now authenticate with Spotify.")
 
 
 def check_environment_variables():
@@ -43,8 +70,14 @@ def initialize_spotify_client():
     global sp
     if sp is not None:
         return  # Already initialized
+
+    # Check if .env file exists and contains credentials
+    if not check_env_file():
+        setup_spotify_credentials()
+
     try:
         logger.debug("Initializing Spotify client...")
+        load_dotenv()  # Load environment variables from .env file
         check_environment_variables()
         
         # Initialize SpotifyOAuth
@@ -67,6 +100,7 @@ def initialize_spotify_client():
         logger.error(f"Unexpected error during Spotify client initialization: {str(e)}")
         raise RuntimeError("An unexpected error occurred during Spotify client initialization.") from e
 
+
 def get_spotify_client():
     """Return the already initialized Spotify client."""
     global sp
@@ -84,6 +118,7 @@ def clear_cached_token():
     except Exception as e:
         logger.error(f"Failed to clear cached token: {e}")
         
+
 def force_immediate_authentication():
     """
     Force immediate authentication by creating a new SpotifyOAuth instance
