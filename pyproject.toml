@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "playlistarchitect", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 spotipy = "^2.23"
 python-dotenv = "^0.21"
 requests = "^2.32"
@@ -15,6 +15,10 @@ tabulate = "^0.9"
 
 [tool.poetry.scripts]
 playlistarchitect = "playlistarchitect.main:main"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+pytest-cov = "^6.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
