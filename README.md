@@ -1,14 +1,15 @@
 <div align="center">
 
 # 🎵 Playlist Architect 📐
-
+> (backup, delete and create Spotify playlists)
 </div>
 
 **Playlist Architect** is a Python-based application designed to help Spotify users manage their playlists. It gives a creative way of creating new playlist based on other playlists, besides other useful functionalities such as backup and bulk delete playlists.
 
 It was born as a final project for the CS50’s course **`Introduction to Programming with Python`**.
 
-## ▶️ Video Demo: https://youtu.be/Zz_8-q6o6sw
+## ▶️ Video Demo
+https://youtu.be/Zz_8-q6o6sw
 
 ## 📑 Technical info
 * **Title:** "Playlist Architect"
@@ -47,8 +48,6 @@ It was born as a final project for the CS50’s course **`Introduction to Progra
    - Securely authenticate with Spotify using OAuth.
    - Clear cached authentication tokens for re-authentication when needed.
 
----
-
 ## ⚙️ How It Works
 
 Playlist Architect interacts with the Spotify API to fetch and manage your playlists. Here's a quick overview of the workflow:
@@ -57,7 +56,6 @@ Playlist Architect interacts with the Spotify API to fetch and manage your playl
 2. **Credential and permission request**: It ask for the credentials and permission needed to operates with the indicated Spotify account. 
 3. **Playlist Retrieval**: It fetches all your playlists, including details like track count, duration, and owner.
 4. **Instant reflect**: Every successfully accomplished action performed by the app is immediately seen in the Spotify account.
----
 
 ## 🤔 Why Use Playlist Architect?
 
@@ -65,14 +63,6 @@ Playlist Architect interacts with the Spotify API to fetch and manage your playl
 - **Flexibility**: Mix and match tracks from different playlists to create unique listening experiences.
 - **Backup Security**: Safeguard your playlists by exporting them to a file, ensuring you never lose your favorite collections.
 - **User-Friendly**: The app features a simple, menu-driven interface that makes playlist management intuitive and accessible.
-
----
-## 🔒 Limitations
-
-- **API level**: At the time of this project's publication, the Spotify API does not allow access to either featured playlists (created and managed by Spotify itself) or user-created folders, so they can't be at all view or managed by this app.
-- **Logic level**: playback time target set for each block is only an estimation. The app will try to fill that time with random tracks. The final time will depends on what tracks it finally pick.
-
----
 
 ## ➡️ Usage Instructions
 
@@ -87,7 +77,7 @@ To get started, clone the repository to your local machine:
 git clone https://github.com/damoscodehub/PlaylistArchitect.git
 cd PlaylistArchitect
 ```
----
+
 ### **3. Install Dependencies**
 
 You can install the required dependencies using either **Poetry** or **pip**.
@@ -113,7 +103,7 @@ poetry shell
 ```bash
 pip install -r requirements.txt
 ```
----
+
 ### **4. Run the Program**
 
 1. Start the application:
@@ -127,14 +117,43 @@ python src/playlistarchitect/main.py
 ```
 2. Follow the on-screen instructions to authenticate with Spotify and start managing your playlists.
 
----
 ## 🥗 Miscellaneous
 
 To resolve imports during development try adding the following to your `.env` file:
 ```bash
 PYTHONPATH=./src
 ```
----
+
+## 🚨 Known issues
+
+### Within our reach (maybe)
+> (we will solve them as soon as we can)
+
+⬛ **Dialog window (tkinter)**: When it pops up (in Backup options), it is not automatically focused.
+⬛ **Folders**: As far as we know, Spotify API does not allow access to user-created folders.
+    We may found a workaround somewhere here:
+    - "Folders are not returned through the Web API, nor can be created using it." https://developer.spotify.com/documentation/web-api/concepts/playlists
+		- May be a text-tree can be saved to have a visual reference of how the original tree was.
+    - see https://github.com/mikez/spotify-folders/blob/master/README.md (last paragraph) "The Spotify Web API does currently not support getting the folder hierarchy. However, one can (as of this writing) find it in the local Spotify cache. This script extracts the data from the cache and returns it in a JSON-formatted way."
+
+### Out of our reach
+❌ **Featured playlists**: As far as we know, Spotify API does not allow access to featured playlists (created and managed by Spotify itself)
+❌ **Final playback mismatch**: The total playback time of a new playlist may be slightly different from the stated time, as the time you allocate to each block is an estimate to fill it with tracks. So, ultimately, it depends on which tracks the app randomly picks. The more blocks you make, the greater the difference in total playback time will likely be.
+
+## ✅ To-do
+
+⬛ Bulk block edition options. 1: Total playback time (for each block). 2: Total sum playback time (evenly divided).
+⬛ Option and instructions to revoke app access to Spotify account.
+⬛ Test "b" (back) and "c" (cancel) inputs. Allow them where they are still missing.
+⬛ Remove > Select playlists to keep (remove the rest).
+⬛ New playlist > Add custom time of silence (fixed/random places)
+⬛ Merge playlists
+⬛ Split playlists
+⬛ User configurations
+	⬛ Refresh playlist data at start.
+	⬛ Delete playlist data on exit.
+	⬛ Delete authentication data on exit.
+
 ## 📜 License
 
 This project is licensed under the **MIT License**. See the [LICENSE](https://LICENSE) file for details.
