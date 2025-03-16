@@ -1,8 +1,12 @@
-# <center>🎵 Playlist Architect 📐</center>
+<div align="center">
+
+# 🎵 Playlist Architect 📐
+
+</div>
 
 **Playlist Architect** is a Python-based application designed to help Spotify users manage their playlists. It gives a creative way of creating new playlist based on other playlists, besides other useful functionalities such as backup and bulk delete playlists.
 
-It was born as a final project for the CS50 course Introduction to Programming with Python
+It was born as a final project for the CS50 course Introduction to Programming with Python.
 
 ## ▶️ Video Demo: https://youtu.be/Zz_8-q6o6sw
 
@@ -65,7 +69,7 @@ Playlist Architect interacts with the Spotify API to fetch and manage your playl
 ---
 ## 🔒 Limitations
 
-- **API's level**: At the time of this project's publication, the Spotify API does not allow access to either featured playlists (created and managed by Spotify itself) or user-created folders, so they can't be at all view or managed by this app.
+- **API level**: At the time of this project's publication, the Spotify API does not allow access to either featured playlists (created and managed by Spotify itself) or user-created folders, so they can't be at all view or managed by this app.
 - **Logic level**: playback time target set for each block is only an estimation. The app will try to fill that time with random tracks. The final time will depends on what tracks it finally pick.
 
 ---
