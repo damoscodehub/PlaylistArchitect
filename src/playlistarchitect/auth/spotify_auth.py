@@ -3,7 +3,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from pathlib import Path
-from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
+from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError, CacheFileHandler
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +53,17 @@ def check_environment_variables():
 
 
 def create_spotify_oauth():
-    """Create a SpotifyOAuth object with the required credentials and scope."""    
+    """Create a SpotifyOAuth object with the required credentials and scope."""
     logging.getLogger('spotipy').setLevel(logging.CRITICAL)
+    cache_handler = CacheFileHandler(cache_path=str(cache_path))
     return SpotifyOAuth(
         client_id=os.getenv("SPOTIPY_CLIENT_ID"),
         client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
         redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI"),
         scope="user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private",
-        cache_path=str(cache_path),
+        cache_handler=cache_handler,
         open_browser=True,
     )
-
 
 def initialize_spotify_client():
     """Initializes the global Spotify client. Call this once at the start of the app."""
