@@ -66,7 +66,7 @@ Playlist Architect interacts with the Spotify API to fetch and manage your playl
 
 ## ➡️ Usage Instructions
 
-### **1.Prerequisites**
+### **1. Prerequisites**
 
 - A Spotify account.
 - Python 3.9 or higher installed on your system.
@@ -127,32 +127,32 @@ PYTHONPATH=./src
 ## 🚨 Known issues
 
 ### Within our reach (maybe)
-> (we will solve them as soon as we can)
+> (We will try to solve them as soon as we can)
 
-⬛ **Dialog window (tkinter)**: When it pops up (in Backup options), it is not automatically focused.
-⬛ **Folders**: As far as we know, Spotify API does not allow access to user-created folders.
+- ⬛ **Dialog window (tkinter)**: When it pops up (in Backup options), it is not automatically focused.
+- ⬛ **Folders**: As far as we know, Spotify API does not allow access to user-created folders.
     We may found a workaround somewhere here:
     - "Folders are not returned through the Web API, nor can be created using it." https://developer.spotify.com/documentation/web-api/concepts/playlists
 		- May be a text-tree can be saved to have a visual reference of how the original tree was.
     - see https://github.com/mikez/spotify-folders/blob/master/README.md (last paragraph) "The Spotify Web API does currently not support getting the folder hierarchy. However, one can (as of this writing) find it in the local Spotify cache. This script extracts the data from the cache and returns it in a JSON-formatted way."
 
 ### Out of our reach
-❌ **Featured playlists**: As far as we know, Spotify API does not allow access to featured playlists (created and managed by Spotify itself)
-❌ **Final playback mismatch**: The total playback time of a new playlist may be slightly different from the stated time, as the time you allocate to each block is an estimate to fill it with tracks. So, ultimately, it depends on which tracks the app randomly picks. The more blocks you make, the greater the difference in total playback time will likely be.
+- ❌ **Featured playlists**: As far as we know, Spotify API does not allow access to featured playlists (created and managed by Spotify itself).
+- ❌ **Final playback mismatch**: The total playback time of a new playlist may be slightly different from the stated time, as the time you allocate to each block is an estimate to fill it with tracks. So, ultimately, it depends on which tracks the app randomly picks. The more blocks you make, the greater the difference in total playback time will likely be.
 
 ## ✅ To-do
 
-⬛ Bulk block edition options. 1: Total playback time (for each block). 2: Total sum playback time (evenly divided).
-⬛ Option and instructions to revoke app access to Spotify account.
-⬛ Test "b" (back) and "c" (cancel) inputs. Allow them where they are still missing.
-⬛ Remove > Select playlists to keep (remove the rest).
-⬛ New playlist > Add custom time of silence (fixed/random places)
-⬛ Merge playlists
-⬛ Split playlists
-⬛ User configurations
-	⬛ Refresh playlist data at start.
-	⬛ Delete playlist data on exit.
-	⬛ Delete authentication data on exit.
+- ⬛ Bulk block edition options. 1: Total playback time (for each block). 2: Total sum playback time (evenly divided).
+- ⬛ Option and instructions to revoke app access to Spotify account.
+- ⬛ Test "b" (back) and "c" (cancel) inputs. Allow them where they are still missing.
+- ⬛ Remove > Select playlists to keep (remove the rest).
+- ⬛ New playlist > Add custom time of silence (fixed/random places)
+- ⬛ Merge playlists
+- ⬛ Split playlists
+- ⬛ User configurations
+	- ⬛ Refresh playlist data at start.
+	- ⬛ Delete playlist data on exit.
+	- ⬛ Delete authentication data on exit.
 
 ## 📜 License
 
